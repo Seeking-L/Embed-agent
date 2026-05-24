@@ -1,24 +1,47 @@
 import esbuild from 'esbuild';
+import { mkdirSync } from 'node:fs';
 
-// 是否带 --watch 参数(改代码自动重新打包)
+// 带 --watch 就进入监听模式
 const watch = process.argv.includes('--watch');
+const mode = watch ? 'development' : 'production';
 
-const ctx = await esbuild.context({
-  entryPoints: ['packages/extension/src/extension.ts'], // 从入口出发
-  outfile: 'packages/extension/dist/extension.js', // 打成这一个文件
-  bundle: true, // 把依赖都揉进来
-  platform: 'node', // 目标是 Node 环境(不是浏览器)
-  format: 'cjs', // VS Code 插件要求 CommonJS 格式
+// 确保 webview 产物目录存在（Tailwind CLI 也会往这里写 main.css）
+mkdirSync('packages/extension/dist/webview', { recursive: true });
+
+// ① 扩展主体：Node + CommonJS（和 M0 完全一样）
+const extensionCtx = await esbuild.context({
+  entryPoints: ['packages/extension/src/extension.ts'],
+  outfile: 'packages/extension/dist/extension.js',
+  bundle: true,
+  platform: 'node',
+  format: 'cjs',
   target: 'node18',
-  external: ['vscode'], // ⚠️ vscode 由宿主提供,绝不能打包进去
+  external: ['vscode'], // 由宿主注入，绝不打包
   sourcemap: true,
 });
 
+// ② Webview 前端：浏览器 + IIFE（自包含，丢进 <script> 就能跑）
+const webviewCtx = await esbuild.context({
+  entryPoints: ['packages/webview/src/main.tsx'],
+  outfile: 'packages/extension/dist/webview/main.js',
+  bundle: true,
+  platform: 'browser',
+  format: 'iife',
+  target: 'es2020',
+  jsx: 'automatic', // 配合 tsconfig 的 react-jsx，省去 import React
+  sourcemap: true,
+  minify: !watch, // 生产构建压缩（React + shiki 体积不小）；watch 时不压缩好调试
+  define: {
+    // 浏览器里没有 process，React 又要读它，必须在打包时替换成字面量
+    'process.env.NODE_ENV': JSON.stringify(mode),
+  },
+});
+
 if (watch) {
-  await ctx.watch();
-  console.log('esbuild: 监听中,改动会自动重打包…');
+  await Promise.all([extensionCtx.watch(), webviewCtx.watch()]);
+  console.log('esbuild: 监听中（extension + webview），改动自动重打包…');
 } else {
-  await ctx.rebuild();
-  await ctx.dispose();
-  console.log('esbuild: 打包完成 -> packages/extension/dist/extension.js');
+  await Promise.all([extensionCtx.rebuild(), webviewCtx.rebuild()]);
+  await Promise.all([extensionCtx.dispose(), webviewCtx.dispose()]);
+  console.log('esbuild: 打包完成 -> dist/extension.js + dist/webview/main.js');
 }

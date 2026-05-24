@@ -5,6 +5,7 @@
       "name": "运行插件",
       "type": "extensionHost",
       "request": "launch",
+      "preLaunchTask": "build",
       "args": ["--extensionDevelopmentPath=${workspaceFolder}/packages/extension"],
       "outFiles": ["${workspaceFolder}/packages/extension/dist/**/*.js"]
     }

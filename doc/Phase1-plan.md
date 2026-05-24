@@ -45,25 +45,25 @@ M0 脚手架 ──► M1 插件骨架+Chat面板 ──► M2 对话核心(LLM+
 | **M3** | 通用工具             | `read_file`/`list_dir`/`search_in_workspace`(只读);可选受控 `run_command`      | M2    | `agent-core` `extension` |
 | **M4** | 评测 + 验收          | 通用对话评测集 + harness                                                       | M1–M3 | `tools/eval`             |
 
-> M0 已完成(文档:`Phase1\M0-工程脚手架-详细文档.md`)。**优先打通 M1+M2 的 tracer bullet**:能和 LLM 流式对话,架构主链路即验证。工具(M3)在框架之上增量加。
+> M0、M1 已完成(文档:`Phase1\M0-工程脚手架-详细文档.md`、`Phase1\M1-插件骨架与Chat面板-详细文档.md`)。M1 已打通「插件骨架 + 侧边栏 Chat 面板 + type-safe RPC + 流式 echo」;**下一步 M2**:把 echo 换成真 LLM 流 + 工具框架,达成 ★ tracer bullet。工具(M3)在框架之上增量加。
 
 ---
 
 ## 二、逐里程碑详细任务
 
-### M1 · 插件骨架 + Chat 面板
+### M1 · 插件骨架 + Chat 面板 ✅(已完成)
 
 **目标**:插件激活,聊天面板能弹出,前后端 type-safe 收发,能显示消息。
 
-- [ ] `extension/package.json` 贡献点:命令 `embed-agent.openChat`、激活事件、配置项
-- [ ] 配置项:`llmProvider`、`model`、`baseURL`;**API key 走 `SecretStorage`**,不进普通设置
-- [ ] Webview Panel + React 18 挂载;消息列表 + 输入框 + 发送 + **停止**按钮
-- [ ] `acquireVsCodeApi()` 封装的 type-safe RPC,前后端共用 `shared` 的 `WebviewToExt`/`ExtToWebview`
-- [ ] Output channel `Embed Agent`:打印激活、配置、(后续)tool call
-- [ ] react-markdown + shiki:渲染助手输出与代码块高亮
-- [ ] 激活时间预算埋点(< 1s)
+- [x] `extension/package.json` 贡献点:命令 `embed-agent.openChat`/`setApiKey`/`clearApiKey`、激活事件、配置项
+- [x] 配置项:`llmProvider`、`model`、`baseURL`;**API key 走 `SecretStorage`**,不进普通设置
+- [x] Webview **侧边栏视图**(WebviewView,非编辑器 Panel)+ React 18 挂载;消息列表 + 输入框 + 发送 + **停止**按钮
+- [x] `acquireVsCodeApi()` 封装的 type-safe RPC,前后端共用 `shared` 的 `WebviewToExt`/`ExtToWebview`
+- [x] Output channel `Embed Agent`:打印激活、配置、(后续)tool call
+- [x] react-markdown + shiki(v4,细粒度 `@shikijs/langs|themes`):渲染助手输出与代码块高亮
+- [x] 激活时间预算埋点(< 1s)
 
-**交付**:F5 启动 → 开面板 → 发消息 → 后端回 echo → 前端渲染。
+**交付**:F5 启动 → 侧边栏开面板 → 发消息 → 后端 echo 流式回 → 前端 markdown 渲染(已达成)。详见 `Phase1/M1-插件骨架与Chat面板-详细文档.md`。
 
 ### M2 · Agent 对话核心
 

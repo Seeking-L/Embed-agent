@@ -4,8 +4,8 @@
   "private": true,
   "packageManager": "pnpm@10.26.2",
   "scripts": {
-    "build": "node esbuild.mjs",
-    "watch": "node esbuild.mjs --watch",
+    "build": "node esbuild.mjs && tailwindcss -i packages/webview/src/styles.css -o packages/extension/dist/webview/main.css --minify",
+    "watch": "concurrently -n js,css \"node esbuild.mjs --watch\" \"tailwindcss -i packages/webview/src/styles.css -o packages/extension/dist/webview/main.css --watch\"",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "lint": "eslint \"packages/**/*.{ts,tsx}\"",
@@ -14,10 +14,13 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@tailwindcss/cli": "^4.3.0",
     "@types/node": "^25.9.1",
+    "concurrently": "^9.2.1",
     "esbuild": "^0.28.0",
     "eslint": "^10.4.0",
     "prettier": "^3.8.3",
+    "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.59.4",
     "vitest": "^4.1.7"

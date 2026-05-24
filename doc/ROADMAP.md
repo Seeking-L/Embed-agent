@@ -21,14 +21,14 @@
 
 Phase 1 拆成 5 个里程碑(M0 → M4),其中 **M1 + M2 合起来是「Tracer bullet」**:能在面板里和 LLM 流式多轮对话,主链路即被验证。
 
-| 里程碑 | 内容                 | 关键产物                                                                | 状态      |
-| ------ | -------------------- | ----------------------------------------------------------------------- | --------- |
-| **M0** | 工程脚手架           | monorepo、构建、lint、CI、共享类型                                      | ✅ 已完成 |
-| **M1** | 插件骨架 + Chat 面板 | 激活、命令、Webview(React)、type-safe RPC、配置、SecretStorage、日志    | ⬜ 下一步 |
-| **M2** | Agent 对话核心       | LLM adapter(多 provider)、流式、工具注册 + 分发、会话状态、**确认原语** | ⬜ 未开始 |
-| ★      | **Tracer bullet**    | 面板里和 LLM 流式多轮对话(M1 + M2)                                      | ⬜ 未达成 |
-| **M3** | 通用工具             | `read_file` / `list_dir` / `search_in_workspace`(只读);可选受控命令     | ⬜ 未开始 |
-| **M4** | 评测 + 验收          | 通用对话评测集 + harness                                                | ⬜ 未开始 |
+| 里程碑 | 内容                 | 关键产物                                                                | 状态             |
+| ------ | -------------------- | ----------------------------------------------------------------------- | ---------------- |
+| **M0** | 工程脚手架           | monorepo、构建、lint、CI、共享类型                                      | ✅ 已完成        |
+| **M1** | 插件骨架 + Chat 面板 | 激活、命令、Webview(React)、type-safe RPC、配置、SecretStorage、日志    | ✅ 已完成        |
+| **M2** | Agent 对话核心       | LLM adapter(多 provider)、流式、工具注册 + 分发、会话状态、**确认原语** | ⬜ 下一步        |
+| ★      | **Tracer bullet**    | 面板里和 LLM 流式多轮对话(M1 + M2)                                      | 🚧 M1 就位,待 M2 |
+| **M3** | 通用工具             | `read_file` / `list_dir` / `search_in_workspace`(只读);可选受控命令     | ⬜ 未开始        |
+| **M4** | 评测 + 验收          | 通用对话评测集 + harness                                                | ⬜ 未开始        |
 
 里程碑依赖与详细任务见 [`Phase1-plan.md` §一、§二](./Phase1-plan.md)。
 
@@ -40,8 +40,8 @@ Phase 1 拆成 5 个里程碑(M0 → M4),其中 **M1 + M2 合起来是「Tracer 
 
 - **monorepo** — pnpm workspace,4 个包:
   - `shared` ✅ — 核心类型(`ToolResult`/`Source` 工具契约、`AgentConfig`/`LlmProvider` 配置、`WebviewToExt`/`ExtToWebview` 消息协议)+ 1 个 vitest 用例。
-  - `extension` ✅ — 最小插件入口 `src/extension.ts`(`activate` 注册 `Embed Agent: Hello`,并从 `@embed-agent/shared` 导入以验证跨包链接)。
-  - `webview` ❄️ — 占位(M1 起填 React 聊天界面)。
+  - `extension` ✅ — 插件本体;M0 是最小入口,**M1 已扩展**为侧边栏聊天视图 + 命令 + 配置 + SecretStorage + Output(见 §四)。
+  - `webview` ✅ — M0 占位,**M1 已实现** React 聊天界面(见 §四)。
   - `agent-core` ❄️ — 占位(M2 起填 LLM 调度与工具系统)。
 - **构建/检查链** — esbuild 打包(`dist/extension.js`)、`tsc` 类型检查、ESLint 9 flat config、Prettier。
 - **调试** — `.vscode/launch.json`,F5 启动「扩展开发宿主」。
@@ -50,23 +50,26 @@ Phase 1 拆成 5 个里程碑(M0 → M4),其中 **M1 + M2 合起来是「Tracer 
 
 本地验收命令全部通过(`install` / `typecheck` / `test` / `build` / `lint` / `format`)。
 
-> 待人工/远端最终确认的两项:**按 F5** 实际跑通 `Embed Agent: Hello`、推送后 **CI 三平台绿勾**。
+> 待远端最终确认:推送后 **CI 三平台绿勾**(本地全部已通过)。
 
 ---
 
-## 四、下一步:M1 · 插件骨架 + Chat 面板 ⬜
+## 四、已完成:M1 · 插件骨架 + Chat 面板 ✅
 
-**目标**:插件激活,聊天面板能弹出,前后端 type-safe 收发,能显示消息(先打通 echo)。
+聊天主链路已打通:**侧边栏 Chat 面板 → 发消息 → 后台流式回 → 前端 markdown 渲染**(本阶段后台是 echo 占位)。手把手见 [`Phase1/M1-插件骨架与Chat面板-详细文档.md`](./Phase1/M1-插件骨架与Chat面板-详细文档.md)。
 
-要点(完整任务清单见 [`Phase1-plan.md` §二 · M1](./Phase1-plan.md)):
+- **侧边栏视图** — `ChatViewProvider`(`WebviewView`,活动栏入口),非编辑器 Panel。
+- **Webview(React)** — React 18 + Zustand 状态 + Tailwind v4(跟随 VS Code 明暗主题)+ react-markdown + shiki(v4,JS 引擎绕开 wasm)代码高亮。
+- **type-safe RPC** — `acquireVsCodeApi()` 封装,前后端共用 `shared` 的 `WebviewToExt` / `ExtToWebview`;流式 `streamDelta` → `assistantDone`,可「停止」(`cancelStream`),显示 token 用量。
+- **命令** — `embed-agent.openChat` / `setApiKey` / `clearApiKey`;**API key 走 `SecretStorage`**,不进普通设置。
+- **配置 + 可观测** — `llmProvider` / `model` / `baseURL`;Output channel `Embed Agent` 打印激活耗时(< 1s)与配置。
+- **构建** — esbuild 出两个 bundle(extension + webview)+ Tailwind CLI 编 CSS;F5 已配 `preLaunchTask` 自动构建。
 
-- `extension` 贡献点:命令 `embed-agent.openChat`、激活事件、配置项(`llmProvider` / `model` / `baseURL`)。
-- **API key 走 `SecretStorage`**,不进普通设置。
-- Webview Panel + React 18;消息列表 + 输入框 + 发送 + **停止**按钮。
-- `acquireVsCodeApi()` 封装的 type-safe RPC,前后端共用 `shared` 的 `WebviewToExt` / `ExtToWebview`。
-- Output channel `Embed Agent` 日志;react-markdown + shiki 渲染;激活时间预算(< 1s)。
+本地验收全部通过(`typecheck` / `lint` / `test` / `build` / frozen-install);webview 另经模拟 DOM 冒烟验证(挂载 + 输入→流式→markdown→shiki 高亮全链路)。待人工确认:**按 F5** 实际跑通侧边栏面板。
 
-随后是 **M2 · Agent 对话核心**(LLM 流式 adapter + 工具循环 + 确认原语),M1 + M2 合并达成 ★ Tracer bullet。
+### 下一步:M2 · Agent 对话核心 ⬜
+
+把 echo 后台换成**真正的 LLM 流** + **工具框架**——前端协议不变(仍是 `streamDelta` / `assistantDone` / `tokenUsage`)。要点(完整见 [`Phase1-plan.md` §二 · M2](./Phase1-plan.md)):LLM thin adapter(必须流式;先 Anthropic,OpenAI 分支覆盖 DeepSeek)、工具注册 + dispatch loop、会话状态/超长截断、token 计费、错误可读 + 重试、取消、**确认原语**(`requestConfirm` 通道 M1 已留好)。M1 + M2 合并达成 ★ Tracer bullet。
 
 ---
 

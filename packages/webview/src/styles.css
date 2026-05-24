@@ -1,0 +1,70 @@
+@import 'tailwindcss';
+
+/* 告诉 Tailwind 去哪些文件里扫 className（v4 用 @source；路径相对本文件） */
+@source './**/*.{ts,tsx}';
+
+/* 把 Tailwind 的颜色指到 VS Code 主题变量上 —— 于是 text-fg / bg-editor 等
+   工具类全部自动跟随明暗主题，不用写两套（概念 7） */
+@theme {
+  --color-editor: var(--vscode-editor-background);
+  --color-fg: var(--vscode-foreground);
+  --color-panel: var(--vscode-panel-border);
+  --color-input: var(--vscode-input-background);
+  --color-input-fg: var(--vscode-input-foreground);
+  --color-input-border: var(--vscode-input-border);
+  --color-focus: var(--vscode-focusBorder);
+  --color-btn: var(--vscode-button-background);
+  --color-btn-fg: var(--vscode-button-foreground);
+  --color-btn2: var(--vscode-button-secondaryBackground);
+  --color-btn2-fg: var(--vscode-button-secondaryForeground);
+  --color-codebg: var(--vscode-textCodeBlock-background);
+  --color-link: var(--vscode-textLink-foreground);
+  --color-err: var(--vscode-inputValidation-errorBackground);
+  --color-err-border: var(--vscode-inputValidation-errorBorder);
+}
+
+/* 整个 webview 的底色/字体跟随 VS Code */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--vscode-editor-background);
+  color: var(--vscode-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+/* shiki 双主题：默认用 light 变量；VS Code 暗色/高对比时切到 dark 变量。
+   VS Code 会给 <body> 加 vscode-light / vscode-dark / vscode-high-contrast 类 */
+.shiki-block .shiki,
+.shiki-block .shiki span {
+  color: var(--shiki-light);
+  background-color: var(--shiki-light-bg);
+}
+.vscode-dark .shiki-block .shiki,
+.vscode-dark .shiki-block .shiki span,
+.vscode-high-contrast .shiki-block .shiki,
+.vscode-high-contrast .shiki-block .shiki span {
+  color: var(--shiki-dark);
+  background-color: var(--shiki-dark-bg);
+}
+.shiki-block .shiki {
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  overflow-x: auto;
+}
+
+/* markdown 基本排版（Tailwind 的 preflight 会清掉默认样式，这里补回来一点） */
+.markdown-body p {
+  margin: 0.25rem 0;
+}
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0.25rem 0;
+  padding-left: 1.25rem;
+  list-style: revert;
+}
+.markdown-body a {
+  color: var(--vscode-textLink-foreground);
+}

@@ -7,18 +7,54 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": [
-    "Other"
-  ],
+  "categories": ["Other"],
   "main": "./dist/extension.js",
   "activationEvents": [],
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "embed-agent",
+          "title": "Embed Agent",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "embed-agent": [
+        {
+          "type": "webview",
+          "id": "embed-agent.chat",
+          "name": "Chat"
+        }
+      ]
+    },
     "commands": [
-      {
-        "command": "embed-agent.hello",
-        "title": "Embed Agent: Hello"
+      { "command": "embed-agent.openChat", "title": "Embed Agent: Open Chat" },
+      { "command": "embed-agent.setApiKey", "title": "Embed Agent: Set API Key" },
+      { "command": "embed-agent.clearApiKey", "title": "Embed Agent: Clear API Key" }
+    ],
+    "configuration": {
+      "title": "Embed Agent",
+      "properties": {
+        "embed-agent.llmProvider": {
+          "type": "string",
+          "enum": ["anthropic", "openai", "deepseek"],
+          "default": "anthropic",
+          "description": "选用的大模型提供商。"
+        },
+        "embed-agent.model": {
+          "type": "string",
+          "default": "claude-opus-4-7",
+          "description": "模型名，如 claude-opus-4-7 / deepseek-v4-flash。"
+        },
+        "embed-agent.baseURL": {
+          "type": "string",
+          "default": "",
+          "description": "自定义 API 端点；留空用官方默认。DeepSeek 填 https://api.deepseek.com。"
+        }
       }
-    ]
+    }
   },
   "dependencies": {
     "@embed-agent/shared": "workspace:*"

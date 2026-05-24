@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目状态
 
-**早期阶段:M0 脚手架基本就绪。** pnpm monorepo 已起:`packages/shared` 有共享类型 + 1 个 vitest 用例;`packages/extension` 有最小插件入口 `src/extension.ts`(`activate` 注册 `embed-agent.hello`,并从 `@embed-agent/shared` 导入以验证 monorepo 链接),`pnpm build` 能打出 `dist/extension.js`、F5 可调试。文档(`doc/`)仍是设计的**事实来源**。命令现状:`test` / `typecheck` / `lint` / `build` / `format` 均可跑,仅 `get-embed` 待补(详见「命令」)。
+**早期阶段:M0 脚手架 + M1 插件骨架/Chat 面板已完成。** pnpm monorepo 已起:`packages/shared` 有共享类型 + 1 个 vitest 用例;`packages/extension` 注册**侧边栏 Webview 聊天视图**(`ChatViewProvider`)、命令(`openChat`/`setApiKey`/`clearApiKey`)、配置项、SecretStorage、Output channel、激活计时;`packages/webview` 是 **React 18 + Zustand + Tailwind v4 + react-markdown + shiki** 的聊天界面,经 type-safe RPC 与后台收发。M1 后台是 **echo 占位**(分片模拟流式),M2 换成真 LLM。`pnpm build` 产出 `dist/extension.js` + `dist/webview/main.js` + `main.css`,F5 可调试。文档(`doc/`)仍是设计的**事实来源**。命令现状:`test` / `typecheck` / `lint` / `build` / `format` 均可跑,仅 `get-embed` 待补(详见「命令」)。
 
 **定位(2026-05 更新)**:本项目是**通用嵌入式开发助手**(复现 CubeMX:自然语言配置芯片/板子 + 生成框架代码),面向普通嵌入式开发者;**Zephyr 仅作开源硬件数据源/参考**借鉴,产品不绑定 Zephyr。包名/命令统一 **`embed-agent`**(仓库目录仍叫 `Zephyr-agent`)。
 
@@ -54,7 +54,7 @@ tools/
   eval/              # Agent 能力评测
 ```
 
-**当前实况(与上图的差距)**:现有 4 个包——`shared`、`extension`、`webview`、`agent-core`,其中 `webview` / `agent-core` 仅占位(各一行 `*_PLACEHOLDER` 导出,分别留给 M1 / M2);`hw-data` 与 `tools/` 尚未创建。包用 pnpm workspace 串联,新增包须命名 `@embed-agent/<name>`、互相以 `workspace:*` 依赖(见 `extension` 依赖 `shared` 的写法)。CI 在 `.github/workflows/ci.yml`(Win/macOS/Linux 三平台跑 typecheck/lint/test/build);许可证 Apache 2.0(`LICENSE`)。
+**当前实况(与上图的差距)**:现有 4 个包——`shared`、`extension`、`webview`、`agent-core`。`webview` 已是完整 React 聊天界面(M1 完成:React 18 + Zustand + Tailwind v4 + react-markdown + shiki);`agent-core` 仍仅占位(一行 `AGENT_CORE_PLACEHOLDER`,留给 M2 的 LLM 调度 + 工具框架);`hw-data` 与 `tools/` 尚未创建。包用 pnpm workspace 串联,新增包须命名 `@embed-agent/<name>`、互相以 `workspace:*` 依赖(见 `extension` 依赖 `shared` 的写法)。CI 在 `.github/workflows/ci.yml`(Win/macOS/Linux 三平台跑 typecheck/lint/test/build);许可证 Apache 2.0(`LICENSE`)。
 
 `packages/shared/src/index.ts` 是核心契约的**单一事实来源**(改协议先改这里,前后端共用):
 
@@ -82,7 +82,7 @@ tools/
 
 - 测试:`pnpm test`(= `vitest run`)。单测:`pnpm test <文件路径片段>` 或 `pnpm test -t "<用例名>"`。
 - 类型检查:`pnpm typecheck`(= `tsc --noEmit -p tsconfig.json`,覆盖 `packages/*/src`)。
-- 构建:`pnpm build`(= `node esbuild.mjs`)→ 把 `extension/src/extension.ts` 打包成 `packages/extension/dist/extension.js`(`vscode` 设 external、cjs/node18、带 sourcemap);`pnpm watch` 增量重打包。
+- 构建:`pnpm build`(= `node esbuild.mjs && tailwindcss …`)→ 打**两个** bundle:`extension/src/extension.ts` → `dist/extension.js`(node/cjs、`vscode` external),`webview/src/main.tsx` → `dist/webview/main.js`(browser/iife、生产 minify);再用 Tailwind CLI 编出 `dist/webview/main.css`。`pnpm watch`(concurrently 同跑 esbuild + Tailwind 两个监听)增量重打包。
 - Lint:`pnpm lint`(flat config `eslint.config.mjs` + typescript-eslint;忽略 `dist`/`node_modules`)。
 - 格式化:`pnpm format`(`prettier --write .`,**原地改写**全仓未忽略文件,含 `doc/` 中文文档;`.prettierrc` = 单引号/分号/printWidth 100/trailingComma all;未设 `proseWrap`,故不重排段落换行。无 `.prettierignore`)。
 
@@ -90,7 +90,7 @@ tools/
 
 - `pnpm get-embed` → `node scripts/get-embed.mjs`:`scripts/` 目录与脚本**尚不存在**,会直接报错。
 
-VS Code 插件调试(M1 起):F5 启动 Extension Development Host —— 需先有 `dist/extension.js`,即先打通 `build`。
+VS Code 插件调试:F5 启动 Extension Development Host(`launch.json` 已配 `preLaunchTask: build` 自动构建)→ 活动栏 Embed Agent 图标 → 侧边栏 Chat 面板;改 webview 后在调试宿主里重载即可。
 
 获取数据源(**嵌入式方向解冻后**才需要;含后期 `hw-index build` 索引 CLI):
 
