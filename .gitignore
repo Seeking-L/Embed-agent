@@ -1,0 +1,10 @@
+node_modules/
+dist/
+out/
+coverage/
+*.vsix
+*.db
+.DS_Store
+
+# Claude Code 本地个人设置(权限等),不入库;团队共享设置用 .claude/settings.json
+.claude/settings.local.json

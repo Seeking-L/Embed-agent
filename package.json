@@ -1,0 +1,24 @@
+{
+  "name": "embed-agent-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "lint": "eslint \"packages/**/*.{ts,tsx}\"",
+    "format": "prettier --write .",
+    "get-embed": "node scripts/get-embed.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.9.1",
+    "esbuild": "^0.28.0",
+    "eslint": "^10.4.0",
+    "prettier": "^3.8.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.4",
+    "vitest": "^4.1.7"
+  }
+}

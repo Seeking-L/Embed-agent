@@ -1,0 +1,29 @@
+{
+  "name": "embed-agent",
+  "displayName": "Embed AI Agent",
+  "description": "Conversational AI agent (VS Code extension)",
+  "version": "0.0.1",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "embed-agent.hello",
+        "title": "Embed Agent: Hello"
+      }
+    ]
+  },
+  "dependencies": {
+    "@embed-agent/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.120.0"
+  }
+}

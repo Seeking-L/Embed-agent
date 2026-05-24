@@ -1,0 +1,3 @@
+# 声明:packages/ 下每个子目录都是一个独立的包
+packages:
+  - 'packages/*'
