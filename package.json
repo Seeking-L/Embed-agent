@@ -2,6 +2,7 @@
   "name": "embed-agent-monorepo",
   "version": "0.0.0",
   "private": true,
+  "packageManager": "pnpm@10.26.2",
   "scripts": {
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
