@@ -1447,7 +1447,7 @@ const send = useChat((s) => s.send);
 
 ## 下一步:M2 预告
 
-M1 完成后进 **M2 · Agent 对话核心**(主战场转到 `agent-core` 包):
+M1 完成后进 **M2 · Agent 对话核心**(主战场转到 `agent-core` 包),手把手见 [`M2-Agent对话核心-详细文档.md`](./M2-Agent对话核心-详细文档.md):
 
 - LLM **thin adapter**:`chat(messages, tools, opts) → AsyncIterable<Delta>`,**必须流式**;先 Anthropic,再加 OpenAI 分支(同分支覆盖 DeepSeek,靠 `baseURL`)。
 - **工具注册 + 分发循环**:收到 `tool_use` → 校验入参 → 跑 handler → 回填 `tool_result` → 续答。

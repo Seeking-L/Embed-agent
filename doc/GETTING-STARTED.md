@@ -122,5 +122,7 @@ pnpm typecheck && pnpm lint && pnpm test
 ## 8. 下一步
 
 - M1(侧边栏 Chat 面板)怎么搭、为什么这么搭:[M1 详细文档](./Phase1/M1-插件骨架与Chat面板-详细文档.md)。
+- M2(LLM + 流式 + 工具框架 + 可视化设置面板)怎么搭:[M2 详细文档](./Phase1/M2-Agent对话核心-详细文档.md)。
+- 想**真正和模型对话**:F5 后点聊天面板右上角 **⚙** 选 provider、填 model、粘 API key(国内推荐 DeepSeek,最便宜、可直连);详见 [M2 文档 · 步骤 13](./Phase1/M2-Agent对话核心-详细文档.md)。
 - 想知道接下来开发什么:[开发进度与路线图](./ROADMAP.md)。
 - 写代码前请先读工程约束与护栏:[CLAUDE.md](../CLAUDE.md)。

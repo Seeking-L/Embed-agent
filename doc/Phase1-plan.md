@@ -45,7 +45,7 @@ M0 脚手架 ──► M1 插件骨架+Chat面板 ──► M2 对话核心(LLM+
 | **M3** | 通用工具             | `read_file`/`list_dir`/`search_in_workspace`(只读);可选受控 `run_command`      | M2    | `agent-core` `extension` |
 | **M4** | 评测 + 验收          | 通用对话评测集 + harness                                                       | M1–M3 | `tools/eval`             |
 
-> M0、M1 已完成(文档:`Phase1\M0-工程脚手架-详细文档.md`、`Phase1\M1-插件骨架与Chat面板-详细文档.md`)。M1 已打通「插件骨架 + 侧边栏 Chat 面板 + type-safe RPC + 流式 echo」;**下一步 M2**:把 echo 换成真 LLM 流 + 工具框架,达成 ★ tracer bullet。工具(M3)在框架之上增量加。
+> M0、M1、M2 已完成(文档:`Phase1\M0-工程脚手架-详细文档.md`、`Phase1\M1-插件骨架与Chat面板-详细文档.md`、`Phase1\M2-Agent对话核心-详细文档.md`)。M2 已把 echo 换成**真 LLM 流式多轮对话 + 工具调用循环 + 确认原语 + 多 provider(Anthropic/OpenAI/DeepSeek)**,★ tracer bullet 达成;**下一步 M3**:在框架之上增量加通用只读工具(read_file 等)。
 
 ---
 
@@ -65,20 +65,21 @@ M0 脚手架 ──► M1 插件骨架+Chat面板 ──► M2 对话核心(LLM+
 
 **交付**:F5 启动 → 侧边栏开面板 → 发消息 → 后端 echo 流式回 → 前端 markdown 渲染(已达成)。详见 `Phase1/M1-插件骨架与Chat面板-详细文档.md`。
 
-### M2 · Agent 对话核心
+### M2 · Agent 对话核心 ✅(已完成)
 
 **目标**:能流式对话、能发起并消费 tool call 的核心循环;含确认原语。
 
-- [ ] LLM thin adapter:`chat(messages, tools, opts) → AsyncIterable<Delta>`;**streaming 必须**。先实现 Anthropic;再加 OpenAI 分支(同一分支即覆盖 **DeepSeek**,靠 `baseURL` + OpenAI 兼容)
-- [ ] Tool registry:工具 = `{ name, description, inputSchema(JSON Schema), handler }`;adapter 负责转各 provider 的工具格式
-- [ ] Dispatch loop:收到 `tool_use` → 校验入参 → 跑 handler → 回填 `tool_result` → 继续,直到文本终态
-- [ ] 会话状态:消息历史;超 N 轮做摘要压缩;单 tool 输出过长截断
-- [ ] System prompt 模板(本阶段**通用助手**,不注入任何领域信息)
-- [ ] **确认原语**:工具可标 `requiresConfirm`,执行前向 Webview 发 `requestConfirm`,用户允许才跑(为将来受控操作打底)
-- [ ] token 用量回传 Webview;provider 错误(429/超时)人类可读 + 重试
-- [ ] 取消:`cancelStream` 能中断当前流
+- [x] LLM thin adapter:`chat(req) → AsyncIterable<LlmStreamEvent>`;streaming。Anthropic + OpenAI 两份(同份覆盖 **DeepSeek**,靠 `baseURL` + OpenAI 兼容)
+- [x] Tool registry:工具 = `{ name, description, inputSchema(JSON Schema), requiresConfirm?, handler }`;adapter 负责转各 provider 的工具格式
+- [x] Dispatch loop:收到 `tool_use` → 跑 handler → 回填 `tool_result` → 继续,直到文本终态(严格 JSON Schema 入参校验留待后续,当前靠 handler 内断言 + try/catch 兜底)
+- [x] 会话状态:消息历史;单 tool 输出过长截断(**超 N 轮摘要压缩留待后续**,当前仅截断)
+- [x] System prompt 模板(本阶段**通用助手**,不注入任何领域信息)
+- [x] **确认原语**:工具可标 `requiresConfirm`,执行前向 Webview 发 `requestConfirm`,用户允许才跑(为将来受控操作打底)
+- [x] token 用量回传 Webview(API 真实用量);provider 错误(401/404/429)人类可读;SDK 自带退避重试
+- [x] 取消:`cancelStream` 经 `AbortController` 中断当前流
+- [x] (额外)**可视化设置面板**:聊天头部 ⚙ 打开,可视化选 provider / 填 model·baseURL / 设 key(key 只写不读、走 SecretStorage);命令入口仍保留
 
-**交付**:给一个假工具,能完成「调用→拿结果→续答」多步循环;`requiresConfirm` 工具会弹确认;★ **tracer bullet 达成**。
+**交付(已达成)**:演示工具(`get_current_time` 无需确认 / `run_demo_command` 需确认)验证「调用→拿结果→续答」多步循环 + 确认弹窗;★ **tracer bullet 达成**。实现见 `agent-core` 包,手把手文档 `Phase1/M2-Agent对话核心-详细文档.md`。
 
 ### M3 · 通用工具(领域无关)
 

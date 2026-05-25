@@ -6,7 +6,7 @@
 **AI 原生、跨厂商的开源「CubeMX + Copilot」嵌入式开发助手。**
 
 ![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)
-![Status](https://img.shields.io/badge/status-Phase_1_M1_complete-green)
+![Status](https://img.shields.io/badge/status-Phase_1_M2_complete-green)
 ![VS Code](https://img.shields.io/badge/VS_Code-%5E1.85-007ACC?logo=visualstudiocode&logoColor=white)
 ![Built with](https://img.shields.io/badge/TypeScript-pnpm_monorepo-3178C6?logo=typescript&logoColor=white)
 
@@ -46,7 +46,7 @@ Rewrite the Zephyr toolchain (`west`/`cmake`/`dtc` — it only wraps them), writ
 
 TypeScript · pnpm workspace (monorepo) · esbuild · vitest · ESLint + Prettier · VS Code API ≥ 1.85 · React 18 + Zustand + Tailwind v4 + react-markdown + shiki (webview, M1) · Anthropic / OpenAI SDK with a thin streaming adapter. Models: `claude-opus-4-7` (dev), `claude-sonnet-4-6` (prod), `claude-haiku-4-5` (cheap subtasks). **Bring your own API key** (stored in VS Code SecretStorage; telemetry off by default).
 
-The monorepo has four packages — `shared` (shared types, the source of truth for the RPC/tool contracts), `extension` (the VS Code extension host: sidebar chat view, commands, config, SecretStorage), `webview` (the React chat UI, done in M1), plus the `agent-core` placeholder (M2).
+The monorepo has four packages — `shared` (shared types, the source of truth for the RPC/tool contracts), `extension` (the VS Code extension host: sidebar chat view, commands, config, SecretStorage), `webview` (the React chat UI, done in M1), plus `agent-core` (M2 — LLM thin adapter for Anthropic/OpenAI/DeepSeek, streaming tool loop, tool registry, confirm primitive).
 
 ### Quick start
 
@@ -66,6 +66,7 @@ For prerequisites, full commands, and troubleshooting, see **[Getting Started](d
 - 📋 [Phase 1 Plan](doc/Phase1-plan.md) — the conversational-agent foundation _(in Chinese)_
 - 🛠️ [M0 Scaffold Walkthrough](doc/Phase1/M0-工程脚手架-详细文档.md) — step-by-step setup _(in Chinese)_
 - 💬 [M1 Plugin Skeleton + Chat Panel Walkthrough](doc/Phase1/M1-插件骨架与Chat面板-详细文档.md) — sidebar webview, RPC, streaming _(in Chinese)_
+- 🧠 [M2 Agent Core Walkthrough](doc/Phase1/M2-Agent对话核心-详细文档.md) — LLM adapters, streaming tool loop, confirm primitive, visual settings panel _(in Chinese)_
 - 🔌 [STM32 Data Sources](doc/STM32_数据来源汇总.md) — why Zephyr DTS/bindings is the primary data source _(in Chinese)_
 - 🤖 [CLAUDE.md](CLAUDE.md) — conventions & guardrails for AI assistants and contributors
 
@@ -107,7 +108,7 @@ For prerequisites, full commands, and troubleshooting, see **[Getting Started](d
 
 TypeScript · pnpm workspace(monorepo)· esbuild · vitest · ESLint + Prettier · VS Code API ≥ 1.85 · React 18 + Zustand + Tailwind v4 + react-markdown + shiki(webview,M1 完成)· Anthropic / OpenAI SDK,中间隔一层自写的流式 adapter。模型:`claude-opus-4-7`(开发期)、`claude-sonnet-4-6`(生产)、`claude-haiku-4-5`(廉价子任务)。**用户自带 API key**(存于 VS Code SecretStorage;默认零遥测)。
 
-monorepo 有 4 个包 —— `shared`(共享类型,RPC / 工具契约的事实来源)、`extension`(VS Code 插件本体:侧边栏聊天视图、命令、配置、SecretStorage)、`webview`(React 聊天界面,M1 完成),以及占位的 `agent-core`(M2)。
+monorepo 有 4 个包 —— `shared`(共享类型,RPC / 工具契约的事实来源)、`extension`(VS Code 插件本体:侧边栏聊天视图、命令、配置、SecretStorage)、`webview`(React 聊天界面,M1 完成),以及 `agent-core`(M2 已实现:面向 Anthropic/OpenAI/DeepSeek 的 LLM thin adapter、流式工具循环、工具注册表、确认原语)。
 
 ### 快速开始
 
@@ -127,6 +128,7 @@ pnpm build
 - 📋 [Phase 1 计划](doc/Phase1-plan.md) — 通用对话 agent 底座
 - 🛠️ [M0 脚手架详细文档](doc/Phase1/M0-工程脚手架-详细文档.md) — 手把手搭建
 - 💬 [M1 插件骨架 + Chat 面板详细文档](doc/Phase1/M1-插件骨架与Chat面板-详细文档.md) — 侧边栏 webview、RPC、流式
+- 🧠 [M2 Agent 对话核心详细文档](doc/Phase1/M2-Agent对话核心-详细文档.md) — LLM adapter、流式工具循环、确认原语、可视化设置面板
 - 🔌 [STM32 数据来源汇总](doc/STM32_数据来源汇总.md) — 为何以 Zephyr DTS/bindings 为主数据源
 - 🤖 [CLAUDE.md](CLAUDE.md) — 给 AI 助手与贡献者的约定和护栏
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目状态
 
-**早期阶段:M0 脚手架 + M1 插件骨架/Chat 面板已完成。** pnpm monorepo 已起:`packages/shared` 有共享类型 + 1 个 vitest 用例;`packages/extension` 注册**侧边栏 Webview 聊天视图**(`ChatViewProvider`)、命令(`openChat`/`setApiKey`/`clearApiKey`)、配置项、SecretStorage、Output channel、激活计时;`packages/webview` 是 **React 18 + Zustand + Tailwind v4 + react-markdown + shiki** 的聊天界面,经 type-safe RPC 与后台收发。M1 后台是 **echo 占位**(分片模拟流式),M2 换成真 LLM。`pnpm build` 产出 `dist/extension.js` + `dist/webview/main.js` + `main.css`,F5 可调试。文档(`doc/`)仍是设计的**事实来源**。命令现状:`test` / `typecheck` / `lint` / `build` / `format` 均可跑,仅 `get-embed` 待补(详见「命令」)。
+**早期阶段:M0 脚手架 + M1 Chat 面板 + M2 对话核心已完成。** pnpm monorepo 已起:`packages/shared` 有共享类型 + 1 个 vitest 用例;`packages/extension` 注册**侧边栏 Webview 聊天视图**(`ChatViewProvider`)、命令(`openChat`/`setApiKey`/`clearApiKey`)、配置项、SecretStorage、Output channel、激活计时;`packages/webview` 是 **React 18 + Zustand + Tailwind v4 + react-markdown + shiki** 的聊天界面,经 type-safe RPC 与后台收发;`packages/agent-core` 是 **LLM thin adapter(Anthropic + OpenAI/DeepSeek)+ 流式工具循环 `runAgent` + `ToolRegistry` + 确认原语**(纯 TS、不依赖 vscode、带离线单测)。M2 已把 M1 的 **echo 占位**换成**真 LLM 流式多轮对话 + 工具调用循环**(达成 ★ tracer bullet);演示工具 `get_current_time`/`run_demo_command` 验证回路,真实只读工具留给 M3。聊天面板右上角 **⚙ 可视化设置面板**(`webview/settings.ts` + `components/SettingsPanel.tsx`)可视化配置 provider/model/baseURL 并设 key(走 `configState`/`saveConfig`/`setApiKey` 等 RPC;key 只写不读、存 SecretStorage)。`pnpm build` 产出 `dist/extension.js`(已打进 SDK)+ `dist/webview/main.js` + `main.css`,F5 可调试。文档(`doc/`)仍是设计的**事实来源**。命令现状:`test` / `typecheck` / `lint` / `build` / `format` 均可跑,仅 `get-embed` 待补(详见「命令」)。
 
 **定位(2026-05 更新)**:本项目是**通用嵌入式开发助手**(复现 CubeMX:自然语言配置芯片/板子 + 生成框架代码),面向普通嵌入式开发者;**Zephyr 仅作开源硬件数据源/参考**借鉴,产品不绑定 Zephyr。包名/命令统一 **`embed-agent`**(仓库目录仍叫 `Zephyr-agent`)。
 
@@ -15,6 +15,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `doc/Embed-AI-Agent-开发规划.md` — 总体规划(架构、技术选型、分阶段路线、护栏)
 - `doc/Phase1-plan.md` — 现行 Phase 1 计划(通用对话底座)
 - `doc/Phase1/M0-工程脚手架-详细文档.md` — M0 脚手架手把手
+- `doc/Phase1/M1-插件骨架与Chat面板-详细文档.md` — M1 插件骨架 + 侧边栏 Chat 面板手把手
+- `doc/Phase1/M2-Agent对话核心-详细文档.md` — M2 LLM + 流式 + 工具框架手把手(已实现并验证)
 - `doc/STM32_数据来源汇总.md` — 数据来源分析(为何以 Zephyr DTS/bindings 为主数据源)
 
 > ⚠️ 下面的"架构 / 技术栈 / 护栏 / Zephyr 领域速记"多为**最终产品(含嵌入式能力)**的设计;其中芯片/Zephyr 相关部分属**已冻结阶段**,当前底座只用到通用部分。
@@ -54,7 +56,7 @@ tools/
   eval/              # Agent 能力评测
 ```
 
-**当前实况(与上图的差距)**:现有 4 个包——`shared`、`extension`、`webview`、`agent-core`。`webview` 已是完整 React 聊天界面(M1 完成:React 18 + Zustand + Tailwind v4 + react-markdown + shiki);`agent-core` 仍仅占位(一行 `AGENT_CORE_PLACEHOLDER`,留给 M2 的 LLM 调度 + 工具框架);`hw-data` 与 `tools/` 尚未创建。包用 pnpm workspace 串联,新增包须命名 `@embed-agent/<name>`、互相以 `workspace:*` 依赖(见 `extension` 依赖 `shared` 的写法)。CI 在 `.github/workflows/ci.yml`(Win/macOS/Linux 三平台跑 typecheck/lint/test/build);许可证 Apache 2.0(`LICENSE`)。
+**当前实况(与上图的差距)**:现有 4 个包——`shared`、`extension`、`webview`、`agent-core`。`webview` 已是完整 React 聊天界面(M1 完成:React 18 + Zustand + Tailwind v4 + react-markdown + shiki);`agent-core` 已实现 M2 核心(`src/{types,loop,registry,prompt,errors}.ts` + `adapters/{anthropic,openai,index}.ts` + `tools/demo.ts`,带 `loop.test.ts` 离线单测;依赖 `@anthropic-ai/sdk`、`openai`);`hw-data` 与 `tools/` 尚未创建。包用 pnpm workspace 串联,新增包须命名 `@embed-agent/<name>`、互相以 `workspace:*` 依赖(见 `extension` 依赖 `shared` 的写法)。CI 在 `.github/workflows/ci.yml`(Win/macOS/Linux 三平台跑 typecheck/lint/test/build);许可证 Apache 2.0(`LICENSE`)。
 
 `packages/shared/src/index.ts` 是核心契约的**单一事实来源**(改协议先改这里,前后端共用):
 
