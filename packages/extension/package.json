@@ -7,7 +7,9 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Other"],
+  "categories": [
+    "Other"
+  ],
   "main": "./dist/extension.js",
   "activationEvents": [],
   "contributes": {
@@ -30,16 +32,29 @@
       ]
     },
     "commands": [
-      { "command": "embed-agent.openChat", "title": "Embed Agent: Open Chat" },
-      { "command": "embed-agent.setApiKey", "title": "Embed Agent: Set API Key" },
-      { "command": "embed-agent.clearApiKey", "title": "Embed Agent: Clear API Key" }
+      {
+        "command": "embed-agent.openChat",
+        "title": "Embed Agent: Open Chat"
+      },
+      {
+        "command": "embed-agent.setApiKey",
+        "title": "Embed Agent: Set API Key"
+      },
+      {
+        "command": "embed-agent.clearApiKey",
+        "title": "Embed Agent: Clear API Key"
+      }
     ],
     "configuration": {
       "title": "Embed Agent",
       "properties": {
         "embed-agent.llmProvider": {
           "type": "string",
-          "enum": ["anthropic", "openai", "deepseek"],
+          "enum": [
+            "anthropic",
+            "openai",
+            "deepseek"
+          ],
           "default": "anthropic",
           "description": "选用的大模型提供商。"
         },
@@ -57,6 +72,7 @@
     }
   },
   "dependencies": {
+    "@embed-agent/agent-core": "workspace:*",
     "@embed-agent/shared": "workspace:*"
   },
   "devDependencies": {

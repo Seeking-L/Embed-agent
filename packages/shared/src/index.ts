@@ -57,29 +57,47 @@ export type WebviewToExt =
   // 用户对某条"确认请求"(见下方 requestConfirm)的回应。
   // id:对应是哪一条请求(可能同时挂着多条);approved:同意 / 拒绝 ——
   // 这就是"执行命令"等受控操作的"放行开关"(对应"write-heavy is gated"原则)。
-  | { type: 'confirmResponse'; id: string; approved: boolean };
+  | { type: 'confirmResponse'; id: string; approved: boolean }
+  // ↓↓↓ 可视化设置面板用的几条消息 ↓↓↓
+  // 打开设置面板时,向后台索取当前配置(provider/model/baseURL + 是否已设置 key)。
+  | { type: 'getConfig' }
+  // 保存「非敏感」配置(写进 VS Code 设置)。
+  | { type: 'saveConfig'; provider: LlmProvider; model: string; baseURL: string }
+  // 设置 API key(存进 SecretStorage;key 永不回传前端)。
+  | { type: 'setApiKey'; key: string }
+  // 清除 API key。
+  | { type: 'clearApiKey' };
 
 // ---- 方向二:Extension(后台)──► Webview(界面)----
 export type ExtToWebview =
   // 回答的一小片增量文本(流式输出,一片一片来);界面把 text 追加到当前气泡。
   // 为什么不整段一次发?因为"必须流式",边生成边显示体验才好(见规划 §3.3)。
   | { type: 'streamDelta'; text: string }
-  // agent 开始调用某个工具了;name 是工具名(如 'read_file')。
-  // 界面可据此显示"正在查 xxx…",让用户看见 agent 在做什么(可审计)。
-  | { type: 'toolCallStart'; name: string }
-  // 某次工具调用结束;name 是哪个工具,ok 表示成功与否。界面更新那条状态。
-  | { type: 'toolCallResult'; name: string; ok: boolean }
+  // agent 开始调用某个工具了;id 用于和下面的 result 配对(一轮可能并发多个工具),
+  // name 是工具名(如 'get_current_time')。界面据此显示"正在调用 xxx…",让用户看见
+  // agent 在做什么(可审计)。
+  | { type: 'toolCallStart'; id: string; name: string }
+  // 某次工具调用结束;id 对应上面的 start,name 是哪个工具,ok 表示成功与否。界面更新那条状态。
+  | { type: 'toolCallResult'; id: string; name: string; ok: boolean }
   // 本轮回答彻底结束(流式输出完了)。无字段;界面可借此重新启用输入框。
   | { type: 'assistantDone' }
-  // agent 想执行一个需要用户点头的操作(如执行一条命令),请界面弹确认框。
-  // id:之后用户的 confirmResponse 靠它对应回来;
-  // command:将要执行的完整命令,原样给用户看清楚再决定(不允许偷偷执行)。
-  | { type: 'requestConfirm'; id: string; command: string }
+  // agent 想执行一个需要用户点头的操作(如执行命令),请界面弹确认卡片。
+  // id:之后用户的 confirmResponse 靠它对应回来(M2 起可同时挂多条,按 id 配对);
+  // toolName:将要调用的工具名;summary:一句人话说明它要干什么(原样给用户看清再决定)。
+  | { type: 'requestConfirm'; id: string; toolName: string; summary: string }
   // 出错了(LLM 报 429 / 超时、配置缺失等);message 是人类可读的说明。
   | { type: 'error'; message: string }
   // 本轮 / 累计 token 用量;input、output 分别是输入、输出 token 数。
   // 界面显示出来,让用户对"花了多少"心里有数(见规划 §3.3 token 计费)。
-  | { type: 'tokenUsage'; input: number; output: number };
+  | { type: 'tokenUsage'; input: number; output: number }
+  // 当前配置回传前端(hasApiKey 只表示「是否已设置」,绝不回传 key 本身)。
+  | {
+      type: 'configState';
+      provider: LlmProvider;
+      model: string;
+      baseURL: string;
+      hasApiKey: boolean;
+    };
 
 // ========== 4) 一个小工具函数(纯粹为了有东西可测试)==========
 // 参数和返回值都标了类型。反引号是"模板字符串",你在 JS 里见过。
