@@ -21,7 +21,7 @@
 //        ...
 //     1500\tGenF1.menu.upload_method...
 //
-//   …(已截断;还剩 8321 行。下一段请用 start_line=1501 续读,或改用 grep 类工具定位)
+//   …(已截断;还剩 8321 行。下一段请用 start_line=1501 续读,或改用 search_files(grep)定位)
 //
 // 调用方(loop.ts::stringifyResult)会自动追加来源:`vendor/.../boards.txt:1-1500`。
 //
@@ -40,12 +40,7 @@
 
 import { readFile, stat, open } from 'node:fs/promises';
 import type { ToolSpec } from '../types';
-import {
-  resolveSafe,
-  toDisplayPath,
-  PathOutOfRangeError,
-  type FsToolConfig,
-} from './paths';
+import { resolveSafe, toDisplayPath, PathOutOfRangeError, type FsToolConfig } from './paths';
 
 // ============================================================================
 // 几个常量 —— 全是"经验值",每一个的取舍详见 M3 详细文档 §3 概念 5。
@@ -81,7 +76,15 @@ const BINARY_PEEK_BYTES = 512;
 // `handler` 是"闭包":它捕获了外层 cfg,后续每次调用都能用到那份配置——
 // 这是 JS 闭包最经典、最实用的用法。
 // ============================================================================
-export function createReadFileTool(cfg: FsToolConfig): ToolSpec {
+// 【M4 新增可选参数 onRead】每成功读到一个文件,就回调一次 onRead(该文件的绝对路径)。
+// 这是给写文件工具 propose_file_edit 做「read-before-edit(改前先读)」用的:extension 用
+// 一个共享的 Set 记录「本会话 read_file 读过哪些文件」,改文件前校验「必须先读过」
+// (抄 Claude Code 的硬约束,挡住模型「没看过文件就凭印象瞎改」的头号写文件 bug)。
+// 不传 onRead(比如单测)时就是普通 read_file,行为完全不变。
+export function createReadFileTool(
+  cfg: FsToolConfig,
+  onRead?: (absPath: string) => void,
+): ToolSpec {
   return {
     name: 'read_file',
 
@@ -132,7 +135,11 @@ export function createReadFileTool(cfg: FsToolConfig): ToolSpec {
     // handler:真正干活的函数。input 类型是 unknown(来自 LLM 的 JSON,事先无法知道
     // 具体形状),用 `as { ... }` 收窄成期望的形状再用。这是 ToolSpec 接口的契约。
     handler: async (input) => {
-      const { path: p, start_line, limit } = input as {
+      const {
+        path: p,
+        start_line,
+        limit,
+      } = input as {
         path: string;
         start_line?: number;
         limit?: number;
@@ -170,7 +177,7 @@ export function createReadFileTool(cfg: FsToolConfig): ToolSpec {
           result:
             `拒绝:${p} 大小 ${(st.size / 1024 / 1024).toFixed(1)} MB,` +
             `超过单文件 ${MAX_FILE_SIZE / 1024 / 1024} MB 限制。\n` +
-            `建议:用 list_files 探明、grep 类工具(M4 起)精确定位,或自行拆分文件后再读。`,
+            `建议:用 list_files 探明、search_files 精确定位,或自行拆分文件后再读。`,
         };
       }
 
@@ -223,6 +230,10 @@ export function createReadFileTool(cfg: FsToolConfig): ToolSpec {
       // 为什么不流式读?因为我们要按行切片,流式读还得自己缓冲分行,代码复杂得多;
       // 而 20 MB 的文件一次 readFile 在现代机器上没问题(几十毫秒)。
       const full = await readFile(abs, 'utf-8');
+
+      // 记录「本会话读过这个文件」(read-before-edit 用;onRead 没传则无操作)。
+      // 放在这里:已通过路径/大小/二进制等所有闸门、确实读到了文本内容,才算「读过」。
+      onRead?.(abs);
 
       // split('\n') 按换行切:'a\nb\nc' → ['a', 'b', 'c'](3 段)
       //                       'a\nb\nc\n' → ['a', 'b', 'c', ''](4 段,末尾多个空串)
@@ -298,19 +309,18 @@ export function createReadFileTool(cfg: FsToolConfig): ToolSpec {
       // 尾部"下一步"是关键:Cline / Claude Code 都验证过,有这条提示 LLM 会主动续读;
       // 没这条提示 LLM 容易"放弃"或"瞎补"。
       const header =
-        `[文件 ${displayPath} 共 ${totalLines} 行,` +
-        `展示 ${startLine}-${lastLineNum} 行]\n\n`;
+        `[文件 ${displayPath} 共 ${totalLines} 行,` + `展示 ${startLine}-${lastLineNum} 行]\n\n`;
 
       let footer = '';
       if (lineTruncated) {
         const remaining = totalLines - lastLineNum;
         footer =
           `\n\n…(已截断;还剩 ${remaining} 行。` +
-          `下一段请用 start_line=${lastLineNum + 1} 续读,或改用 grep 类工具精确定位)`;
+          `下一段请用 start_line=${lastLineNum + 1} 续读,或改用 search_files 精确定位)`;
       } else if (byteTruncated) {
         footer =
           `\n\n…(已截断:输出超过 ${Math.floor(MAX_BYTES / 1024)} KB,` +
-          `请缩小 limit 或用 grep 类工具定位)`;
+          `请缩小 limit 或用 search_files 定位)`;
       }
 
       // 返回 ToolResult:

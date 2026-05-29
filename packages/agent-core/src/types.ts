@@ -120,3 +120,37 @@ export interface ConfirmRequest {
 }
 // 一个「接收确认请求、返回 Promise<是否允许>」的函数类型。
 export type ConfirmFn = (req: ConfirmRequest) => Promise<boolean>;
+
+// ========== 8) 写文件原语(diff-first,依赖注入)==========
+// 这是 ConfirmFn 的「专用加强版」,只给写文件工具(propose_file_edit)用。
+//
+// 为什么不复用 ConfirmFn?因为 CLAUDE.md 的硬红线是「Diff-first, not autonomous-write」:
+// 改文件不能只弹「一句话 + yes/no」,而要把改动**在 VS Code 原生 diff 编辑器里展示**,
+// 用户点「应用」才落盘。展示 diff、落盘 这两件事都要碰 vscode —— 而 agent-core 是纯 TS、
+// 不 import vscode(见 paths.ts 顶部的护栏)。于是同样走「依赖注入」:
+//   - agent-core 这边只负责「算出改完之后的新内容」(newContent),【绝不写盘】;
+//   - 把「展示 diff + 等用户点 + 落盘」整件事打包成一个 ProposeFn,由 extension 实现后注入;
+//   - 写文件工具的 handler 里 `await propose(req)`,拿到 true(已应用)/ false(用户放弃)。
+//
+// 数据流:read_file 风格地读出原文 → 模糊匹配算出 newContent → propose(原文, 新内容)
+//        → extension 打开「左=原文 / 右=新内容」的原生 diff → 用户点应用 → extension 写盘。
+export interface ProposeEditRequest {
+  // 本次提议的唯一标识(由工具生成,如 'edit_xxx'),用于把「提议」和「用户响应」配对。
+  id: string;
+  // 展示用的相对路径(如 'src/main.c'),给用户看清改的是哪个文件。
+  path: string;
+  // 文件的绝对路径。extension「应用」时用它定位要写哪个真实文件。
+  absPath: string;
+  // 改动前的完整原文(diff 编辑器的左侧)。新建文件时为空串 ''。
+  originalContent: string;
+  // 改完之后的完整新内容(diff 编辑器的右侧;用户点应用时,落盘的就是它)。
+  newContent: string;
+  // 是不是新建文件(true → 左侧为空,展示成「全新增」)。
+  isNewFile: boolean;
+  // 一句人话概述(如「修改 src/main.c(+3 -1 行)」),给前端 diff 卡片显示。
+  summary: string;
+}
+// 「接收一个修改提议、展示 diff 等用户裁决、返回 Promise<是否已应用>」的函数类型。
+//   resolve(true)  → 用户点了「应用」,extension 已把 newContent 写入 absPath;
+//   resolve(false) → 用户点了「放弃」(或取消),文件未改动。
+export type ProposeFn = (req: ProposeEditRequest) => Promise<boolean>;

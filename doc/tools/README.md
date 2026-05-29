@@ -112,6 +112,11 @@
 | ✅ | `read_file` | 按行号分段读取工作区文件(带行号 + 来源引用) | M3 | `packages/agent-core/src/tools/read_file.ts` | [read_file-…](./read_file-按行号分段读取工作区文件.md) |
 | ✅ | `list_files` | 列出目录下的文件与子目录(不递归) | M3 | `packages/agent-core/src/tools/list_files.ts` | [list_files-…](./list_files-列出目录下的文件与子目录.md) |
 | ✅ | `read_pdf` | 抽取 PDF 文件的纯文本 | M3 | `packages/agent-core/src/tools/read_pdf.ts` | [read_pdf-…](./read_pdf-抽取PDF文件的纯文本.md) |
+| ✅ | `search_files` | 用 ripgrep 按正则搜文件内容(grep) | M4 | `packages/agent-core/src/tools/search_files.ts` | [search_files-…](./search_files-用ripgrep按正则搜文件内容.md) |
+| ✅ | `propose_file_edit` | 提议修改文件,经 diff 确认后落盘 | M4 | `packages/agent-core/src/tools/propose_file_edit.ts` | [propose_file_edit-…](./propose_file_edit-提议修改文件经diff确认落盘.md) |
+| ✅ | `web_fetch` | 抓取网页转 Markdown | M4 | `packages/agent-core/src/tools/web_fetch.ts` | [web_fetch-…](./web_fetch-抓取网页转markdown.md) |
+| 🟡 | `web_search` | 网页搜索(暂不实现,待选搜索后端) | M4+ | — | [待办-…](./待办-web_search与browser_action.md) |
+| 🟡 | `browser_action` | Puppeteer 浏览器(大概率不做) | — | — | [待办-…](./待办-web_search与browser_action.md) |
 | 🔴 | `get_current_time` | 返回当前日期与时间(ISO 8601) | M2 → M3 移除 | ~~`tools/demo.ts`~~(已删) | 演示工具,M3 起换成真实工具后移除 |
 | 🔴 | `run_demo_command` | 演示「需要确认」的受控操作(不真执行) | M2 → M3 移除 | ~~`tools/demo.ts`~~(已删) | 演示工具,M3 起移除;真正受控的 `run_command` 留待 M4 |
 

@@ -9,10 +9,13 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.98.0",
     "@embed-agent/shared": "workspace:*",
+    "cheerio": "^1.0.0",
     "openai": "^6.39.0",
-    "pdf-parse": "^1.1.1"
+    "pdf-parse": "^1.1.1",
+    "turndown": "^7.2.0"
   },
   "devDependencies": {
-    "@types/pdf-parse": "^1.1.4"
+    "@types/pdf-parse": "^1.1.4",
+    "@types/turndown": "^5.0.5"
   }
 }

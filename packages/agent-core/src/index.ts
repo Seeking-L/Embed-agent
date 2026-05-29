@@ -25,12 +25,13 @@ export { SYSTEM_PROMPT } from './prompt';
 export { createReadFileTool } from './tools/read_file';
 export { createListFilesTool } from './tools/list_files';
 export { createReadPdfTool } from './tools/read_pdf';
-export {
-  resolveSafe,
-  toDisplayPath,
-  PathOutOfRangeError,
-  type FsToolConfig,
-} from './tools/paths';
+export { resolveSafe, toDisplayPath, PathOutOfRangeError, type FsToolConfig } from './tools/paths';
+
+// ★ M4:写文件(propose_file_edit,依赖注入 ProposeFn)+ grep(search_files,注入 ripgrepPath)
+//   + 网络(web_fetch)。ProposeFn / ProposeEditRequest 类型由上面的 `export * from './types'` 带出。
+export { createSearchFilesTool, type GrepToolConfig } from './tools/search_files';
+export { createProposeFileEditTool } from './tools/propose_file_edit';
+export { createWebFetchTool } from './tools/web_fetch';
 
 // 错误小工具(extension 也可能想直接用)
 export { humanizeError, isAbortError } from './errors';
