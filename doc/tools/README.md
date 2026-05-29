@@ -109,13 +109,13 @@
 
 | 状态 | 工具 | 一句话 | 所属里程碑 | 代码位置 | 详细文档 |
 | --- | --- | --- | --- | --- | --- |
-| ✅ | `get_current_time` | 返回当前日期与时间(ISO 8601) | M2 | `packages/agent-core/src/tools/demo.ts` | _待补_ |
-| ✅ | `run_demo_command` | 演示「需要确认」的受控操作(不真执行) | M2 | `packages/agent-core/src/tools/demo.ts` | _待补_ |
-| 🟡 | `read_file` | 按行号分段读取工作区文件(带行号 + 来源引用) | M3 | `packages/agent-core/src/tools/read_file.ts`(规划) | _待补_ |
-| 🟡 | `list_files` | 列出目录下的文件与子目录(不递归) | M3 | `packages/agent-core/src/tools/list_files.ts`(规划) | _待补_ |
-| 🟡 | `read_pdf` | 抽取 PDF 文件的纯文本 | M3 | `packages/agent-core/src/tools/read_pdf.ts`(规划) | _待补_ |
+| ✅ | `read_file` | 按行号分段读取工作区文件(带行号 + 来源引用) | M3 | `packages/agent-core/src/tools/read_file.ts` | [read_file-…](./read_file-按行号分段读取工作区文件.md) |
+| ✅ | `list_files` | 列出目录下的文件与子目录(不递归) | M3 | `packages/agent-core/src/tools/list_files.ts` | [list_files-…](./list_files-列出目录下的文件与子目录.md) |
+| ✅ | `read_pdf` | 抽取 PDF 文件的纯文本 | M3 | `packages/agent-core/src/tools/read_pdf.ts` | [read_pdf-…](./read_pdf-抽取PDF文件的纯文本.md) |
+| 🔴 | `get_current_time` | 返回当前日期与时间(ISO 8601) | M2 → M3 移除 | ~~`tools/demo.ts`~~(已删) | 演示工具,M3 起换成真实工具后移除 |
+| 🔴 | `run_demo_command` | 演示「需要确认」的受控操作(不真执行) | M2 → M3 移除 | ~~`tools/demo.ts`~~(已删) | 演示工具,M3 起移除;真正受控的 `run_command` 留待 M4 |
 
-> 状态以 2026-05-28 为准。M3 落地后,把 🟡 改为 ✅、把「_待补_」替换成实际文档链接,并核对「代码位置」与最终落地一致。
+> 状态以 M3 落地为准。两个 M2 演示工具(`get_current_time` / `run_demo_command`)已随 `tools/demo.ts` 一并删除——按本目录维护规则第 3 条「废弃工具标 🔴 不删行」,保留这两行以便追溯设计变迁。它们的确认原语 / 工具循环验证职责已由真实工具 + `loop.test.ts` 接管。
 
 ---
 

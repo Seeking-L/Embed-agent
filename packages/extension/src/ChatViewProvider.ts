@@ -52,15 +52,13 @@ import type { WebviewToExt, ExtToWebview, AgentConfig, LlmProvider } from '@embe
 //   ToolRegistry   :工具注册表,带「防重名」的 Map(见 doc 步骤 4.1);
 //   createAdapter  :工厂函数,按 provider 选 Anthropic / OpenAI adapter(见 doc 步骤 7.2);
 //   runAgent       :★ 核心工具循环,async generator(见 doc 步骤 8、概念 1);
-//   demoTools      :两个演示工具——get_current_time / run_demo_command(见 doc 步骤 4.2);
 //   type ChatTurn  :provider 无关的「一条对话消息」(user / assistant / tool 可辨识联合);
 //   type ConfirmRequest:确认请求的形状 { id, toolName, summary }(见 doc 概念 5)。
 import {
   ToolRegistry,
   createAdapter,
   runAgent,
-  demoTools,
-  // ★ M3 新增:真实只读工具的工厂函数 + 路径安全配置类型
+  // ★ M3:真实只读工具的工厂函数 + 路径安全配置类型
   //   它们都是「工厂」而非「常量」——必须先给 allowedRoots / workspaceRoot 才能造出
   //   实际的 ToolSpec(见 doc §3 概念 2「工厂模式」)。
   createReadFileTool,
@@ -106,8 +104,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   // 类型 ChatTurn[] 已经能容纳 user / assistant / tool 三种角色(可辨识联合)。
   private history: ChatTurn[] = [];
 
-  // 工具注册表。构造函数末尾会塞入 demoTools。
-  // M3 加真实只读工具(read_file / list_dir / search_in_workspace …)时,
+  // 工具注册表。构造函数里注册 read_file / list_files / read_pdf 三个只读工具。
+  // 将来加更多工具(grep_file / propose_file_edit …)时,
   // 继续 register 即可——loop.ts 一行不动。这就是「工具可插拔」(见 doc 概念 4)的回报。
   // `readonly`:这个变量名永远指向同一个 Map 实例;Map 内部仍可被 register 添加成员。
   private readonly registry = new ToolRegistry();
@@ -153,11 +151,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private readonly context: vscode.ExtensionContext,
     private readonly output: vscode.OutputChannel,
   ) {
-    // 把演示工具(见 doc 步骤 4.2)登记进注册表。
-    // M2 留下的 get_current_time / run_demo_command 保留,方便对比真假工具的行为差异。
-    for (const tool of demoTools) this.registry.register(tool);
-
-    // ★ M3 新增:真实只读工具(read_file / list_files / read_pdf)
+    // 注册 M3 的真实只读工具(read_file / list_files / read_pdf)。
+    // (M2 的演示工具 get_current_time / run_demo_command 已在 M3 移除。)
     //
     // 为什么要在构造函数里就注册,而不是等 resolveWebviewView?
     //   - registry 是「实例字段」,在视图打开前就要可用(虽然实际不会被用,

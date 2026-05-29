@@ -20,10 +20,7 @@ export { createAdapter } from './adapters';
 // 通用 system prompt(extension 一般用不到,导出以便测试/复用)
 export { SYSTEM_PROMPT } from './prompt';
 
-// 演示工具(M3 起会被真实工具替换/补充)
-export { demoTools, getCurrentTime, runDemoCommand } from './tools/demo';
-
-// ★ M3 新增:真实只读工具(read_file / list_files / read_pdf)+ 路径安全 helper
+// ★ M3:真实只读工具(read_file / list_files / read_pdf)+ 路径安全 helper
 //   注意它们是「工厂函数」而非常量,因为需要 extension 注入 allowedRoots(见 doc 概念 2)。
 export { createReadFileTool } from './tools/read_file';
 export { createListFilesTool } from './tools/list_files';
