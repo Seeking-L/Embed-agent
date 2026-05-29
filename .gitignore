@@ -8,3 +8,9 @@ coverage/
 
 # Claude Code 本地个人设置(权限等),不入库;团队共享设置用 .claude/settings.json
 .claude/settings.local.json
+
+# 本地调研资料(芯片手册等大文件,不入库)
+MeterialsForResearch/
+
+# 第三方拉取的参考资料(Arduino Core STM32 / CMSIS / ST 示例等),用 scripts/get-embed.mjs 可重建
+vendor/
