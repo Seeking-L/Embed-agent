@@ -38,15 +38,25 @@ interface ConfirmState {
   summary: string;
 }
 
+// 【M4】当前待「应用 / 放弃」的写文件提议(没有就是 null)。
+// 真正的逐行 diff 在 VS Code 原生 diff 编辑器里看;这张卡片只放路径 + 一句概述 + 两个按钮。
+interface ApplyDiffState {
+  id: string;
+  path: string;
+  summary: string;
+}
+
 interface ChatState {
   items: ChatItem[];
   streaming: boolean; // 是否正在流式输出(决定显示「发送」还是「停止」)
   error: string | null;
   tokenUsage: { input: number; output: number } | null;
   confirm: ConfirmState | null;
+  applyDiff: ApplyDiffState | null; // 【M4】当前待应用的写文件提议
   send: (text: string) => void; // 用户发一条
   stop: () => void; // 用户点停止
   respondConfirm: (approved: boolean) => void; // 用户点确认卡片的允许/拒绝
+  respondApplyDiff: (apply: boolean) => void; // 【M4】用户点 diff 卡片的应用/放弃
   receive: (msg: ExtToWebview) => void; // 收到后台消息后更新状态
 }
 
@@ -62,6 +72,7 @@ export const useChat = create<ChatState>((set, get) => ({
   error: null,
   tokenUsage: null,
   confirm: null,
+  applyDiff: null,
 
   send: (text) => {
     const trimmed = text.trim();
@@ -85,6 +96,14 @@ export const useChat = create<ChatState>((set, get) => ({
     if (!c) return;
     postToExt({ type: 'confirmResponse', id: c.id, approved });
     set({ confirm: null }); // 收起卡片
+  },
+
+  respondApplyDiff: (apply) => {
+    // 和 respondConfirm 同款:把用户的应用/放弃发回后台,收起卡片。
+    const d = get().applyDiff;
+    if (!d) return;
+    postToExt({ type: 'applyDiffResponse', id: d.id, apply });
+    set({ applyDiff: null });
   },
 
   receive: (msg) => {
@@ -151,11 +170,16 @@ export const useChat = create<ChatState>((set, get) => ({
       case 'requestConfirm':
         set({ confirm: { id: msg.id, toolName: msg.toolName, summary: msg.summary } });
         break;
+      case 'requestApplyDiff':
+        set({ applyDiff: { id: msg.id, path: msg.path, summary: msg.summary } });
+        break;
       case 'assistantDone':
-        set({ streaming: false });
+        // 本轮结束:顺手清掉任何还悬挂的 确认/diff 卡片。此时它们一定是 stale 的——后台在
+        // 取消/收尾时已把对应请求兑现并关掉了原生 diff;卡片若不清会变成「点了没反应」的孤儿。
+        set({ streaming: false, confirm: null, applyDiff: null });
         break;
       case 'error':
-        set({ error: msg.message, streaming: false });
+        set({ error: msg.message, streaming: false, confirm: null, applyDiff: null });
         break;
       case 'tokenUsage':
         set({ tokenUsage: { input: msg.input, output: msg.output } });

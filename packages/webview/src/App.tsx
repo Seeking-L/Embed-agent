@@ -13,6 +13,7 @@ import { onExtMessage, postToExt } from './vscodeApi';
 import { MessageList } from './components/MessageList';
 import { InputBar } from './components/InputBar';
 import { ConfirmCard } from './components/ConfirmCard';
+import { ApplyDiffCard } from './components/ApplyDiffCard';
 import { SettingsPanel } from './components/SettingsPanel';
 
 export function App() {
@@ -55,6 +56,7 @@ export function App() {
         </div>
       )}
       <ConfirmCard />
+      <ApplyDiffCard />
       {usage && (
         <div className="px-3 pb-1 text-right text-xs opacity-60">
           token:{formatTokenUsage(usage.input, usage.output)}

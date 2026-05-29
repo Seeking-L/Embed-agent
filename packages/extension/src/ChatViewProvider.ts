@@ -39,6 +39,8 @@ import * as vscode from 'vscode';
 // Node 内置 path 模块——拼接 allowedRoots 时要用 path.join,跨平台。
 // 用 `node:` 前缀明确"这是 Node 内置,不是 npm 包"。
 import * as path from 'node:path';
+// 同步判断文件是否存在——给 resolveRipgrepPath 探测 VS Code 自带的 rg 二进制路径用。
+import { existsSync } from 'node:fs';
 
 // 共享协议:同一份 TS 类型前后端共用(改协议先改 shared,是 M1 立下的规矩)。
 //   WebviewToExt :前端 → 后端的消息(用户输入、取消、确认响应、配置面板请求…);
@@ -64,7 +66,12 @@ import {
   createReadFileTool,
   createListFilesTool,
   createReadPdfTool,
+  // ★ M4:写文件 / grep / 网络工具的工厂 + 写文件确认原语的请求类型。
+  createSearchFilesTool,
+  createProposeFileEditTool,
+  createWebFetchTool,
   type FsToolConfig,
+  type ProposeEditRequest,
   type ChatTurn,
   type ConfirmRequest,
 } from '@embed-agent/agent-core';
@@ -73,6 +80,32 @@ import {
 // 用一个常量收口:写一处、改一处——避免后面手抖打错键名导致 key 读不出来。
 // 该键名要与 extension.ts 里 Set/Clear API Key 命令使用的键名保持一致。
 const SECRET_KEY = 'embed-agent.apiKey';
+
+// ============================================================================
+// 【M4 diff-first】「提议内容」的只读虚拟文档 scheme
+// ----------------------------------------------------------------------------
+// 写文件遵循 CLAUDE.md「Diff-first, not autonomous-write」:改动落盘前,先在 VS Code 原生
+// diff 编辑器里展示给用户。diff 的左右两侧都用「虚拟只读文档」承载(落盘前【绝不碰磁盘】):
+//   - 做法抄 Cline:把文档内容用 base64 塞进 URI 的 query 里,provider 解码即可——
+//     无状态、不需要 Map 缓存(内容不同 → URI 不同 → 不会串)。
+//   - 这个 scheme 注册一次(见 ChatViewProvider 构造函数),进程内全局有效;虚拟文档天然只读。
+const DIFF_SCHEME = 'embed-agent-diff';
+
+// 无状态 content provider:把 uri.query 当 base64 解码成文档内容。
+const diffContentProvider: vscode.TextDocumentContentProvider = {
+  provideTextDocumentContent(uri: vscode.Uri): string {
+    return Buffer.from(uri.query, 'base64').toString('utf-8');
+  },
+};
+
+// 造一个「装着指定内容」的虚拟只读文档 URI:形如  embed-agent-diff:<显示名>?<base64 内容>。
+// 转义 % # ?(它们会破坏 Uri.parse 对 scheme 部分的解析;真正的内容放在 query 里)。
+function virtualUri(displayName: string, content: string): vscode.Uri {
+  const safeName = displayName.replace(/%/g, '%25').replace(/#/g, '%23').replace(/\?/g, '%3F');
+  return vscode.Uri.parse(`${DIFF_SCHEME}:${safeName}`).with({
+    query: Buffer.from(content, 'utf-8').toString('base64'),
+  });
+}
 
 // 【类的定义】VS Code 注册「侧边栏 webview」必须实现 WebviewViewProvider 接口,
 // 接口只规定一个方法 resolveWebviewView。我们把所有状态(history / abort / registry …)
@@ -137,6 +170,45 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   // `readonly` 锁的是变量名;对象内部的字段还能被 `+=` 修改。
   private readonly totalUsage = { input: 0, output: 0 };
 
+  // 【M4 diff-first】待 Apply/Reject 的「修改提议」配对表(和 pendingConfirms 完全同构):
+  //   key = requestApplyDiff.id;value = 那个 Promise 的 resolve(applied:boolean)。
+  private readonly pendingApplies = new Map<string, (applied: boolean) => void>();
+
+  // 每个挂起提议对应「已打开的 diff 右侧 URI」,用户响应后据此精确关掉那个 diff tab。
+  private readonly openDiffUris = new Map<string, vscode.Uri>();
+
+  // 【read-before-edit】本会话被 read_file 读过的文件(绝对路径)集合。
+  //   read_file 注册时传了 onRead 回调往里 add;propose_file_edit 改文件前查它「必须已读过」。
+  private readonly readFiles = new Set<string>();
+
+  // 【M4 写文件确认原语的「后端实现」】注入给 propose_file_edit(见 agent-core types.ts 的 ProposeFn)。
+  //   四步:打开原生 diff → 发 requestApplyDiff 让前端弹卡片 → 等用户点 Apply/Reject → 关 diff;
+  //   若 Apply,【此刻才】把 newContent 写盘(diff-first:落盘只发生在这一步)。
+  //   写成箭头函数字段是为了把 this 绑死(它会被工具 handler 在「别处」调用,普通方法的 this 会丢)。
+  private readonly propose = async (req: ProposeEditRequest): Promise<boolean> => {
+    const fileName = path.basename(req.absPath);
+    // 左右两侧都是只读虚拟文档:左=原文,右=提议内容。用户改不了,只能在卡片上 Apply/Reject。
+    const leftUri = virtualUri(`${fileName}(原始)`, req.originalContent);
+    const rightUri = virtualUri(`${fileName}(提议)`, req.newContent);
+    const title = `${req.path}:原始 ↔ Embed Agent 提议(只读预览)`;
+    // preview:false → 让它成为稳定 tab(否则下一个 diff 会顶掉它)。
+    await vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, title, {
+      preview: false,
+      preserveFocus: false,
+    });
+    this.openDiffUris.set(req.id, rightUri);
+
+    // 把「等用户点按钮」包装成挂起的 Promise(和 askConfirm 同一套路:存 resolve、发消息、等响应)。
+    const applied = await new Promise<boolean>((resolve) => {
+      this.pendingApplies.set(req.id, resolve);
+      this.post({ type: 'requestApplyDiff', id: req.id, path: req.path, summary: req.summary });
+    });
+
+    await this.closeDiffTab(req.id);
+    if (applied) await this.writeProposed(req); // ★ 落盘只在用户点了 Apply 之后发生
+    return applied;
+  };
+
   // 【构造函数】由 extension.ts 在 activate() 里 new ChatViewProvider(context, output)。
   //
   // 参数前加 `private readonly` 是 TS 的「参数属性」简写——
@@ -160,11 +232,35 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     //   - FsToolConfig 依赖的 workspaceRoot 在插件激活时就已确定(vscode.workspace
     //     当前能拿到);不需要等用户消息进来才计算。
     const fsCfg = this.buildFsConfig();
-    this.registry.register(createReadFileTool(fsCfg));
+    // read_file 注册时传 onRead 回调:每读到一个文件就记进 readFiles(给 propose_file_edit
+    // 的 read-before-edit 校验用)。
+    this.registry.register(
+      createReadFileTool(fsCfg, (abs) => this.readFiles.add(this.pathKey(abs))),
+    );
     this.registry.register(createListFilesTool(fsCfg));
     this.registry.register(createReadPdfTool(fsCfg));
+
+    // ★ M4 新工具:
+    //   - search_files(grep):注入 ripgrep 路径(agent-core 不碰 vscode);
+    //   - web_fetch:无需配置(碰网络、不碰文件系统);
+    //   - propose_file_edit:注入 ProposeFn(this.propose)+ read-before-edit 判定(查 readFiles)。
+    this.registry.register(
+      createSearchFilesTool({ ...fsCfg, ripgrepPath: this.resolveRipgrepPath() }),
+    );
+    this.registry.register(createWebFetchTool());
+    this.registry.register(
+      createProposeFileEditTool(fsCfg, this.propose, (abs) =>
+        this.readFiles.has(this.pathKey(abs)),
+      ),
+    );
+
+    // 注册「提议内容」的只读虚拟文档 provider(diff 两侧靠它取内容,落盘前不碰磁盘)。
+    this.context.subscriptions.push(
+      vscode.workspace.registerTextDocumentContentProvider(DIFF_SCHEME, diffContentProvider),
+    );
+
     this.output.appendLine(
-      `[tools] M3 工具已注册,allowedRoots = ${fsCfg.allowedRoots.join(' | ')}`,
+      `[tools] M3/M4 工具已注册,allowedRoots = ${fsCfg.allowedRoots.join(' | ')}`,
     );
   }
 
@@ -260,6 +356,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         // errors.ts 的 isAbortError 识别后让 loop 安静 return(不发 error 事件)。
         // `?.` 因为 abort 平时是 undefined(用户在没消息时也可能误点停止)。
         this.abort?.abort();
+        // ★ 关键(见 review 发现⑥):若此刻正卡在「等用户点 确认/diff 卡片」上,runAgent 正
+        //   await 在工具 handler 里、for-await 还没结束 → handleUserMessage 的 finally 也跑不到。
+        //   loop 在 await handler 期间又不检查 abort 标志。所以光 abort() 会卡死,必须在这里
+        //   【就地】把挂起的卡片一律兑现成「拒绝/放弃」,让那个 await 返回、loop 收尾。
+        this.resolvePendingCards();
         this.output.appendLine('[user] 取消');
         break;
 
@@ -279,6 +380,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
           this.pendingConfirms.delete(msg.id);
         }
         this.output.appendLine(`[confirm] ${msg.id} -> ${msg.approved}`);
+        break;
+      }
+
+      case 'applyDiffResponse': {
+        // 用户在 diff 卡片上点了「应用 / 放弃」。兑现对应的挂起 Promise(propose 里在等它)。
+        // 和 confirmResponse 同款机制,只是配的是 pendingApplies。
+        const resolveApply = this.pendingApplies.get(msg.id);
+        if (resolveApply) {
+          resolveApply(msg.apply);
+          this.pendingApplies.delete(msg.id);
+        }
+        this.output.appendLine(`[diff] ${msg.id} -> ${msg.apply ? '应用' : '放弃'}`);
         break;
       }
 
@@ -435,12 +548,36 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       this.post({ type: 'assistantDone' });
       // 2) abort 置空:下一轮再 new 一个新的;
       this.abort = undefined;
-      // 3) 兜底清理 pendingConfirms——这是个微妙的边界情况:
-      //    若用户在确认卡片弹着时按了「停止」,askConfirm 里 await 的那个 Promise
-      //    永远不会被 resolve、loop 卡死;这里一律以 false(拒绝)兑现,让 loop 能正常退出。
-      for (const resolve of this.pendingConfirms.values()) resolve(false);
-      this.pendingConfirms.clear();
+      // 3) 兜底:把任何还悬挂的 确认/diff 卡片一律以「拒绝/放弃」兑现(belt-and-suspenders;
+      //    正常路径下它们早被用户点击兑现了)。真正打破「Stop 时卡死」靠的是 cancelStream 里
+      //    提前调用同一个清理——见 resolvePendingCards 的说明。
+      this.resolvePendingCards();
     }
+  }
+
+  // 【取消/收尾兜底】把所有还悬挂的「确认卡片」「diff 卡片」一律以 false(拒绝/放弃)兑现,
+  // 关掉残留的 diff tab,并清空两张配对表。
+  //
+  // 为什么必须能「在取消时」单独调用,而不能只放在 handleUserMessage 的 finally 里:
+  //   用户点 Stop 时,runAgent 可能正 `await` 在某个工具 handler 里(propose_file_edit 等着
+  //   propose() 返回、或某工具等着 confirm() 返回),此时 for-await 还没结束 → finally 跑不到;
+  //   loop 在 await handler 期间也不检查 abort 标志。于是只有在这里【就地】兑现挂起的 Promise,
+  //   那个 await 才会返回、handler 完成、loop 发现已 aborted 后正常退出(否则永久卡死)。
+  private resolvePendingCards(): void {
+    for (const resolve of this.pendingConfirms.values()) resolve(false);
+    this.pendingConfirms.clear();
+    for (const [id, resolve] of this.pendingApplies) {
+      resolve(false);
+      void this.closeDiffTab(id);
+    }
+    this.pendingApplies.clear();
+  }
+
+  // read-before-edit 的 Set 键规整:Windows 文件系统大小写不敏感,read_file('Src/App.ts') 与
+  // propose_file_edit('src/app.ts') 指同一文件却是两个不同字符串。这里在 win32 上统一小写,
+  // 保证「读过」能被认出来,否则会误判「没读过」而拒绝一个合法编辑(见 review 发现⑧)。
+  private pathKey(abs: string): string {
+    return process.platform === 'win32' ? abs.toLowerCase() : abs;
   }
 
   // 【确认原语的「后端实现」】(见 doc 概念 5)
@@ -465,6 +602,60 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         summary: req.summary,
       });
     });
+  }
+
+  // ===== 【M4】写文件 diff-first 的三个辅助方法 =====
+
+  // 把提议内容写入磁盘——【只在用户点 Apply 后】被 propose 调用。
+  // 用 vscode.workspace.fs.writeFile:整文件原子写,无论文件是否在编辑器里打开都行,且不会触发
+  // 编辑器的「保存时自动格式化」——diff-first 要「所见即所得地落盘用户已审阅过的内容」。
+  private async writeProposed(req: ProposeEditRequest): Promise<void> {
+    const uri = vscode.Uri.file(req.absPath);
+    if (req.isNewFile) {
+      // 新建文件:先确保父目录存在(fs.writeFile 不会自动建目录)。
+      //(当前 propose_file_edit 只改已存在文件,isNewFile 恒为 false;此分支为将来的
+      //  propose_new_file 预留。)
+      await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(req.absPath)));
+    }
+    await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(req.newContent));
+    // 落盘后把文件展示出来,让用户立刻看到结果。
+    await vscode.window.showTextDocument(uri, { preview: false });
+  }
+
+  // 关掉某条提议对应的 diff tab(按右侧虚拟 URI 精确匹配,避免误关别的 diff)。
+  // 抄 Cline 的 closeAllDiffViews,但用 modified(右侧)的 scheme + uri 精确定位本条。
+  private async closeDiffTab(id: string): Promise<void> {
+    const rightUri = this.openDiffUris.get(id);
+    this.openDiffUris.delete(id);
+    const tabs = vscode.window.tabGroups.all
+      .flatMap((tg) => tg.tabs)
+      .filter(
+        (tab) =>
+          tab.input instanceof vscode.TabInputTextDiff &&
+          tab.input.modified.scheme === DIFF_SCHEME &&
+          (!rightUri || tab.input.modified.toString() === rightUri.toString()),
+      );
+    for (const tab of tabs) {
+      try {
+        await vscode.window.tabGroups.close(tab);
+      } catch {
+        /* 用户可能已手动关掉,忽略 */
+      }
+    }
+  }
+
+  // 定位 ripgrep 二进制:优先用 VS Code 自带的 rg(随编辑器分发,无需额外依赖),
+  // 找不到就退回 PATH 上的 rg。search_files 工具靠它(agent-core 不碰 vscode,路径由这里注入)。
+  private resolveRipgrepPath(): string {
+    const exe = process.platform === 'win32' ? 'rg.exe' : 'rg';
+    const candidates = [
+      path.join(vscode.env.appRoot, 'node_modules', '@vscode', 'ripgrep', 'bin', exe),
+      path.join(vscode.env.appRoot, 'node_modules.asar.unpacked', '@vscode', 'ripgrep', 'bin', exe),
+    ];
+    for (const c of candidates) {
+      if (existsSync(c)) return c;
+    }
+    return exe; // 兜底:PATH 上的 rg
   }
 
   // 【读用户配置】从 VS Code 用户设置里读 provider / model / baseURL,拼成统一的 AgentConfig。

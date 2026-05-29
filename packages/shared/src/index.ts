@@ -58,6 +58,10 @@ export type WebviewToExt =
   // id:对应是哪一条请求(可能同时挂着多条);approved:同意 / 拒绝 ——
   // 这就是"执行命令"等受控操作的"放行开关"(对应"write-heavy is gated"原则)。
   | { type: 'confirmResponse'; id: string; approved: boolean }
+  // 【M4 写文件】用户对某条 requestApplyDiff 的回应(点了 diff 卡片上的「应用 / 放弃」)。
+  // id:对应是哪一条 requestApplyDiff;apply:true = 应用(extension 据此落盘)/ false = 放弃。
+  // 它和上面的 confirmResponse 是「孪生消息」——同样的请求/响应配对机制,只是专用于写文件。
+  | { type: 'applyDiffResponse'; id: string; apply: boolean }
   // ↓↓↓ 可视化设置面板用的几条消息 ↓↓↓
   // 打开设置面板时,向后台索取当前配置(provider/model/baseURL + 是否已设置 key)。
   | { type: 'getConfig' }
@@ -91,6 +95,17 @@ export type ExtToWebview =
   // id:之后用户的 confirmResponse 靠它对应回来(M2 起可同时挂多条,按 id 配对);
   // toolName:将要调用的工具名;summary:一句人话说明它要干什么(原样给用户看清再决定)。
   | { type: 'requestConfirm'; id: string; toolName: string; summary: string }
+  // 【M4 写文件】agent 提出了一处文件修改,extension 已把它在 VS Code 原生 diff 编辑器里
+  // 打开;请界面弹一张「应用 / 放弃」卡片。这条和 requestConfirm 是「同一个模式的两份」:
+  // 都靠 id 配对响应,只是这条专给「diff-first 写文件」用(确认 = diff 里的 Apply,而不是
+  // 一句话摘要的 yes/no)。
+  //   ⚠️ diff-first 红线(见 CLAUDE.md「Diff-first, not autonomous-write」):此刻文件
+  //      【尚未落盘】;用户点「应用」后,才由 extension 真正写盘。点「放弃」则什么都没动过。
+  //   id     :之后用户的 applyDiffResponse 靠它对应回来(可同时挂多条,按 id 配对);
+  //   path   :被改文件的展示路径(相对工作区根),让用户一眼看清改的是哪个文件;
+  //   summary:一句人话(如「修改 src/main.c(+3 -1 行)」/「新建 foo.txt」)。
+  //            真正的逐行改动在「原生 diff 编辑器」里看,这张卡片只放一句概述 + 两个按钮。
+  | { type: 'requestApplyDiff'; id: string; path: string; summary: string }
   // 出错了(LLM 报 429 / 超时、配置缺失等);message 是人类可读的说明。
   | { type: 'error'; message: string }
   // 本轮 / 累计 token 用量;input、output 分别是输入、输出 token 数。
