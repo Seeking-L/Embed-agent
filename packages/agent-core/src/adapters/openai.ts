@@ -41,6 +41,15 @@ export function createOpenAiAdapter(apiKey: string, baseURL?: string): LlmAdapte
         if (choice?.delta?.content) {
           yield { type: 'text', text: choice.delta.content };
         }
+        // 「思考过程」文本(DeepSeek thinking / R1 等模型独有,OpenAI SDK 的官方
+        // 类型里没声明此字段,所以用 as 断言一下;非思考型模型这个字段永远是 undefined)。
+        // 这一片必须 yield 给 loop 累加进 ChatTurn.reasoningContent —— DeepSeek 要求
+        // 下一轮请求里把上一轮的 reasoning_content 一起回传,否则 400。
+        const reasoning = (choice?.delta as { reasoning_content?: string } | undefined)
+          ?.reasoning_content;
+        if (reasoning) {
+          yield { type: 'reasoning', text: reasoning };
+        }
         // ?? [] :delta.tool_calls 可能没有,用空数组兜底,免得 for 报错。
         for (const tc of choice?.delta?.tool_calls ?? []) {
           // ??= :calls[index] 还没有就先建一个空壳,再往里填。
@@ -94,19 +103,36 @@ function toOpenAiMessages(
     if (turn.role === 'user') {
       out.push({ role: 'user', content: turn.content });
     } else if (turn.role === 'assistant') {
+      // 【DeepSeek thinking 兼容】思考型模型(DeepSeek thinking、R1 等)在上一轮流里
+      // 会单独吐 reasoning_content。loop 已把它累加进 turn.reasoningContent;这里把它
+      // 原样塞回 assistant 消息——不传就 400(`The reasoning_content in the thinking
+      // mode must be passed back to the API`)。非思考型模型 reasoningContent 是
+      // undefined,展开 `{}` 不会污染消息。
+      //
+      // 因为 OpenAI SDK 的官方类型里没有 reasoning_content 字段,我们先构造一个普通
+      // 对象再 as 成 ChatCompletionMessageParam(超集允许多余字段,API 自己会识别)。
+      const reasoningPart: Record<string, string> = turn.reasoningContent
+        ? { reasoning_content: turn.reasoningContent }
+        : {};
+
       if (turn.toolCalls && turn.toolCalls.length > 0) {
         out.push({
           role: 'assistant',
           content: turn.content || null, // 只调工具、没说话时 content 为 null
+          ...reasoningPart,
           tool_calls: turn.toolCalls.map((c) => ({
             id: c.id,
             type: 'function',
             // OpenAI 这里要的是「参数的 JSON 字符串」,所以把对象再 stringify 回去
             function: { name: c.name, arguments: JSON.stringify(c.input) },
           })),
-        });
+        } as OpenAI.Chat.Completions.ChatCompletionMessageParam);
       } else {
-        out.push({ role: 'assistant', content: turn.content });
+        out.push({
+          role: 'assistant',
+          content: turn.content,
+          ...reasoningPart,
+        } as OpenAI.Chat.Completions.ChatCompletionMessageParam);
       }
     } else {
       // 工具结果:OpenAI 用独立的一条 role:'tool' 消息(和 Anthropic 不同,不用合并)

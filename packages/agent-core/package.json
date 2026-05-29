@@ -9,6 +9,10 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.98.0",
     "@embed-agent/shared": "workspace:*",
-    "openai": "^6.39.0"
+    "openai": "^6.39.0",
+    "pdf-parse": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/pdf-parse": "^1.1.4"
   }
 }

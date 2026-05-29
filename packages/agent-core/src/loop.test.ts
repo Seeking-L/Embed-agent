@@ -103,4 +103,49 @@ describe('runAgent 工具循环', () => {
     const toolResult = history.find((t) => t.role === 'tool');
     expect(toolResult?.content).toContain('拒绝');
   });
+
+  // ============================================================================
+  // 【M3 修复】DeepSeek thinking 模式下 reasoning_content 必须回传到下一轮
+  // ----------------------------------------------------------------------------
+  // 这条用例钉死的行为:
+  //   ① adapter 流里吐 `reasoning` 事件 → loop 必须把它累加进 ChatTurn.reasoningContent;
+  //   ② loop 必须把 `reasoning` AgentEvent 转发给上层(让 extension 可以展示"思考中");
+  //   ③ assistant 的发言和思考是分两个字段存,不能混进 content。
+  // ============================================================================
+  it('reasoning 流事件:累加进 history.reasoningContent + 转发给上层', async () => {
+    const registry = new ToolRegistry();
+    // adapter 一次性给一段思考 + 一段正文 + 直接结束(不调工具)
+    const adapter: LlmAdapter = {
+      async *chat() {
+        yield { type: 'reasoning', text: '我先想一想:' };
+        yield { type: 'reasoning', text: '用户问的是 X。' };
+        yield { type: 'text', text: '答案是 Y。' };
+      },
+    };
+    const history: ChatTurn[] = [{ role: 'user', content: '问题 X' }];
+    const events: AgentEvent[] = [];
+    for await (const ev of runAgent({
+      adapter,
+      registry,
+      model: 'stub',
+      history,
+      confirm: async () => true,
+    })) {
+      events.push(ev);
+    }
+
+    // ① 上层收到了 reasoning 事件(用 type 数组方便整体看)
+    const types = events.map((e) => e.type);
+    expect(types).toContain('reasoning');
+
+    // ② history 里的 assistant turn 把思考和正文分开存
+    const assistant = history.find((t) => t.role === 'assistant');
+    // TS 类型守卫:只有进了 if 分支,assistant.role === 'assistant',下面访问 content
+    // / reasoningContent 才有类型支持。
+    if (!assistant || assistant.role !== 'assistant') {
+      throw new Error('未找到 assistant turn');
+    }
+    expect(assistant.content).toBe('答案是 Y。');
+    expect(assistant.reasoningContent).toBe('我先想一想:用户问的是 X。');
+  });
 });

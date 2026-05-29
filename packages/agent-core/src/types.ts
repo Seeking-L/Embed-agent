@@ -34,8 +34,17 @@ export interface ToolCall {
 export type ChatTurn =
   // 用户说的话
   | { role: 'user'; content: string }
-  // 模型说的话;它可能在说话的同时「要求调用若干工具」(toolCalls 可选)
-  | { role: 'assistant'; content: string; toolCalls?: ToolCall[] }
+  // 模型说的话;它可能在说话的同时「要求调用若干工具」(toolCalls 可选)。
+  // reasoningContent 是「思考型模型」(DeepSeek thinking / R1 等)在正式回答前的
+  // 思维链文本——这类模型要求**多轮对话里把上一轮的 reasoning_content 一起回传**,
+  // 否则会 400(`The reasoning_content in the thinking mode must be passed back to the API`)。
+  // Anthropic / OpenAI 的非思考模型不会产生此字段,留 undefined 即可。
+  | {
+      role: 'assistant';
+      content: string;
+      reasoningContent?: string;
+      toolCalls?: ToolCall[];
+    }
   // 某次工具调用的结果;toolCallId 对应上面 ToolCall 的 id,content 是结果文本
   | { role: 'tool'; toolCallId: string; content: string };
 
@@ -63,6 +72,9 @@ export interface ToolSpec {
 export type LlmStreamEvent =
   // 一小片回答文字(模型边想边说,一片一片来)
   | { type: 'text'; text: string }
+  // 一小片「思考过程」文字(仅思考型模型有,如 DeepSeek thinking 的 reasoning_content
+  // 流);loop 会累加进 ChatTurn.reasoningContent,作为下一轮请求的必填字段回传。
+  | { type: 'reasoning'; text: string }
   // 模型完整地请求了一次工具调用(参数已拼接、解析完毕)
   | { type: 'toolCall'; call: ToolCall }
   // 本次请求的 token 用量(由 API 真实返回,不用我们自己数)
@@ -90,6 +102,7 @@ export interface LlmAdapter {
 // extension 会把每个 AgentEvent 一一映射成 shared 的 ExtToWebview 发给前端。
 export type AgentEvent =
   | { type: 'text'; text: string } // 一小片回答文字
+  | { type: 'reasoning'; text: string } // 一小片「思考过程」文字(仅思考型模型有,如 DeepSeek thinking)
   | { type: 'toolStart'; id: string; name: string } // 开始执行某工具
   | { type: 'toolEnd'; id: string; name: string; ok: boolean } // 某工具执行完(成功/失败)
   | { type: 'usage'; input: number; output: number } // token 用量

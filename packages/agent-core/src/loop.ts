@@ -19,7 +19,17 @@ import { SYSTEM_PROMPT } from './prompt';
 import { humanizeError, isAbortError } from './errors';
 
 // 单个工具结果回填给模型的字符数上限,超了就截断(防止一个超大文件撑爆上下文/烧钱)。
-const MAX_TOOL_RESULT_CHARS = 8000;
+//
+// 【M3 调整】从 8000 抬到 500_000。原因:
+//   - M2 时只有演示工具(get_current_time 返回 ~20 字符),8000 完全够用,只是个粗糙的兜底;
+//   - M3 起接 read_file 真工具,它的最大输出是 ~400 KB(header + 400 KB body + footer)。
+//     如果 loop 继续按 8000 字符截,read_file 自己的"分段 + 续读提示"全部被截掉,
+//     LLM 看不到末尾的 `start_line=N+1`,等于把 read_file 的核心设计废了。
+//   - 500_000 字符 ≈ 125K~250K tokens(取决于英/中/代码),Opus 4.7 的 1M 上下文完全扛得住,
+//     但仍是有效的"运行时安全网":若将来某工具失控吐 10 MB,loop 还能切一刀。
+//
+// 改这个值时请一并检查:read_file.ts 的 MAX_BYTES(400 KB)是不是仍 < 这个上限。
+const MAX_TOOL_RESULT_CHARS = 500_000;
 
 // runAgent 的参数。用一个对象打包,比一长串位置参数清楚。
 export interface RunAgentOptions {
@@ -43,6 +53,11 @@ export async function* runAgent(opts: RunAgentOptions): AsyncIterable<AgentEvent
     if (signal?.aborted) return; // 进每轮前先看是否已取消
 
     let assistantText = ''; // 累积本轮模型说的话
+    // 累积本轮的「思考过程」文本(仅思考型模型——DeepSeek thinking、R1 等——有)。
+    // 必须把它和 assistantText 分开累加:DeepSeek 要求下一轮请求里把上一轮的
+    // reasoning_content 一起回传,否则报 400(`The reasoning_content in the thinking
+    // mode must be passed back to the API`)。
+    let assistantReasoning = '';
     const toolCalls: ToolCall[] = []; // 本轮模型想调的工具
 
     // ① 把当前历史发给模型,边收边吐
@@ -57,6 +72,11 @@ export async function* runAgent(opts: RunAgentOptions): AsyncIterable<AgentEvent
         if (ev.type === 'text') {
           assistantText += ev.text;
           yield { type: 'text', text: ev.text }; // 文字 → 立刻转发给上层
+        } else if (ev.type === 'reasoning') {
+          // 思考片段:累加 + 转发给上层(extension 可以选择展示成"思考中..."折叠区,
+          // 或单纯打到日志——这是 UI 的事;loop 只负责保证下一轮请求带上它)。
+          assistantReasoning += ev.text;
+          yield { type: 'reasoning', text: ev.text };
         } else if (ev.type === 'toolCall') {
           toolCalls.push(ev.call); // 工具请求 → 先收集,等流结束再统一执行
         } else if (ev.type === 'usage') {
@@ -70,11 +90,26 @@ export async function* runAgent(opts: RunAgentOptions): AsyncIterable<AgentEvent
     }
 
     // ② 把模型这一轮的发言记进历史
+    // 用展开 `...(condition ? { x: ... } : {})` 表达"可选字段":
+    //   - reasoningContent 仅当本轮真的收到了 reasoning 片段才加;
+    //   - toolCalls 仅当模型确实要调工具才加。
+    // 这样普通模型(非思考、不调工具)的 assistant turn 就是干净的 `{role, content}`,
+    // 不会带任何 undefined 字段。
+    const reasoningPart = assistantReasoning ? { reasoningContent: assistantReasoning } : {};
     if (toolCalls.length > 0) {
-      history.push({ role: 'assistant', content: assistantText, toolCalls });
+      history.push({
+        role: 'assistant',
+        content: assistantText,
+        ...reasoningPart,
+        toolCalls,
+      });
     } else {
       // 没要调工具 → 本轮彻底结束
-      history.push({ role: 'assistant', content: assistantText });
+      history.push({
+        role: 'assistant',
+        content: assistantText,
+        ...reasoningPart,
+      });
       yield { type: 'done' };
       return;
     }

@@ -73,6 +73,12 @@ export type ExtToWebview =
   // 回答的一小片增量文本(流式输出,一片一片来);界面把 text 追加到当前气泡。
   // 为什么不整段一次发?因为"必须流式",边生成边显示体验才好(见规划 §3.3)。
   | { type: 'streamDelta'; text: string }
+  // 一小片「思考过程」文本(只在思考型模型——DeepSeek thinking、R1 等——产生)。
+  // 界面把它追加到"当前正在生成的助手气泡"的可折叠"💭 思考过程"区,与正文 streamDelta
+  // 分开存。即使前端选择不展示,extension 也必须把 reasoning 累加进 ChatTurn.reasoningContent
+  // 后回传给 API,否则 DeepSeek 报 400(`The reasoning_content in the thinking mode
+  // must be passed back to the API`),所以这条消息在协议里是必需的。
+  | { type: 'reasoningDelta'; text: string }
   // agent 开始调用某个工具了;id 用于和下面的 result 配对(一轮可能并发多个工具),
   // name 是工具名(如 'get_current_time')。界面据此显示"正在调用 xxx…",让用户看见
   // agent 在做什么(可审计)。

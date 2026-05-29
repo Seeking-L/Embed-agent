@@ -23,5 +23,17 @@ export { SYSTEM_PROMPT } from './prompt';
 // 演示工具(M3 起会被真实工具替换/补充)
 export { demoTools, getCurrentTime, runDemoCommand } from './tools/demo';
 
+// ★ M3 新增:真实只读工具(read_file / list_files / read_pdf)+ 路径安全 helper
+//   注意它们是「工厂函数」而非常量,因为需要 extension 注入 allowedRoots(见 doc 概念 2)。
+export { createReadFileTool } from './tools/read_file';
+export { createListFilesTool } from './tools/list_files';
+export { createReadPdfTool } from './tools/read_pdf';
+export {
+  resolveSafe,
+  toDisplayPath,
+  PathOutOfRangeError,
+  type FsToolConfig,
+} from './tools/paths';
+
 // 错误小工具(extension 也可能想直接用)
 export { humanizeError, isAbortError } from './errors';

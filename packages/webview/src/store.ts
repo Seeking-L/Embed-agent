@@ -15,8 +15,16 @@ import { postToExt, getPersistedState, setPersistedState } from './vscodeApi';
 
 // 时间线里的一项:要么是普通气泡(user/assistant),要么是一条工具调用记录。
 // 这是「可辨识联合」:靠 role 区分,渲染时 switch 即可。
+//
+// 【M3 补丁】assistant 多了一个 `reasoning` 字段(思考型模型独有):
+//   - DeepSeek thinking / R1 等模型流里会先吐 reasoning_content,再吐 content;
+//   - 前者累加到 `reasoning`,后者累加到 `text`,**分开两段存**;
+//   - UI 里把 reasoning 渲染成可折叠的「💭 思考过程」区,放在主气泡上方。
+// 用户气泡没有 reasoning;非思考型模型(Anthropic / OpenAI 普通)产生的 assistant 气泡
+// reasoning 字段保持 undefined,渲染时跳过那一段——零成本。
 export type ChatItem =
-  | { id: string; role: 'user' | 'assistant'; text: string }
+  | { id: string; role: 'user'; text: string }
+  | { id: string; role: 'assistant'; text: string; reasoning?: string }
   | { id: string; role: 'tool'; name: string; status: 'running' | 'ok' | 'error' };
 
 interface PersistedState {
@@ -92,6 +100,35 @@ export const useChat = create<ChatState>((set, get) => ({
             items[items.length - 1] = { ...last, text: last.text + msg.text };
           } else {
             items.push({ id: uid(), role: 'assistant', text: msg.text });
+          }
+          return { items };
+        });
+        break;
+      case 'reasoningDelta':
+        // 思考片段(DeepSeek thinking / R1 等独有):规则和 streamDelta 几乎一致,
+        // 只是追加到 reasoning 字段而非 text。
+        //
+        // 关键差异:思考通常**先于**正文产生(模型先想再说),所以这条分支必须能
+        // **凭空创建一条 reasoning 不为空但 text 为空**的 assistant 气泡。等正文
+        // streamDelta 来了再追加到同一条 item 的 text(因为它已是 last assistant)。
+        // —— 这就是为什么这里"新开气泡"分支里 text 设成 ''。
+        set((s) => {
+          const items = s.items.slice();
+          const last = items[items.length - 1];
+          if (last && last.role === 'assistant') {
+            // `last.reasoning ?? ''`:之前是 undefined 就当空串开始,首段 reasoning
+            // 进来时不会出现 'undefined' + msg.text 的拼接事故。
+            items[items.length - 1] = {
+              ...last,
+              reasoning: (last.reasoning ?? '') + msg.text,
+            };
+          } else {
+            items.push({
+              id: uid(),
+              role: 'assistant',
+              text: '',
+              reasoning: msg.text,
+            });
           }
           return { items };
         });
